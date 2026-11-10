@@ -6,14 +6,30 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win zip --x64"
+    "dist": "electron-builder --win nsis --x64 --publish never"
   },
   "build": {
     "appId": "br.casaemdia.app",
     "productName": "Casa em Dia",
-    "files": ["main.js", "preload.js", "ui/**"],
-    "directories": { "output": "dist" },
-    "win": { "target": ["zip"], "signAndEditExecutable": false }
+    "files": [
+      "main.js",
+      "preload.js",
+      "ui/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "Casa-em-Dia-Instalador.exe",
+      "shortcutName": "Casa em Dia"
+    }
   },
   "devDependencies": {
     "@fontsource-variable/inter": "^5.3.0",

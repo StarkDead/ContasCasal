@@ -1,0 +1,25 @@
+{
+  "name": "casa-em-dia",
+  "version": "1.0.0",
+  "description": "Finanças da casa para o casal",
+  "author": "Casa em Dia",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win zip --x64"
+  },
+  "build": {
+    "appId": "br.casaemdia.app",
+    "productName": "Casa em Dia",
+    "files": ["main.js", "preload.js", "ui/**"],
+    "directories": { "output": "dist" },
+    "win": { "target": ["zip"], "signAndEditExecutable": false }
+  },
+  "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/manrope": "^5.3.0",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0",
+    "xlsx": "0.18.5"
+  }
+}

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Casa em Dia</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="card side">
+    <div class="brand">
+      <div class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M9 15l2 2 4-4"/></svg></div>
+      <div><b>Casa em Dia</b><small>Finanças do casal</small></div>
+    </div>
+    <div class="navs">
+      <div class="lbl">Menu</div>
+      <nav id="nav">
+        <a href="#visao" data-v="visao"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>Visão geral</a>
+        <a href="#fluxo" data-v="fluxo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg>Fluxo de caixa</a>
+        <a href="#cartoes" data-v="cartoes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18"/></svg>Cartões</a>
+        <a href="#casa" data-v="casa"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Nossa casa</a>
+        <a href="#reserva" data-v="reserva"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2.5"/><circle cx="15.5" cy="12.5" r="1.6"/><path d="M7 6V4.5h7V6"/></svg>Nossa reserva</a>
+        <a href="#financ" data-v="financ"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/></svg>Financiamentos</a>
+      </nav>
+      <div class="lbl">Ajustes</div>
+      <nav>
+        <a href="#renda" data-v="renda"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>Nossa renda</a>
+        <a href="#dados" data-v="dados"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg>Arquivo de dados</a>
+      </nav>
+    </div>
+    <div class="foot">
+      <div class="trow"><span>Tema</span><div class="seg mini" id="tema"><button data-tema="light" aria-label="Tema claro">☀</button><button data-tema="dark" aria-label="Tema escuro">☾</button></div></div>
+      <div class="lbl">Vendo como</div>
+      <div class="seg" id="who"></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="card top">
+      <button class="ib" id="prev" aria-label="Mês anterior"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <button class="ib" id="next" aria-label="Próximo mês"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></button>
+      <h1 id="mes"></h1>
+      <button class="btn ghost" id="imp">Importar arquivo</button>
+      <button class="btn" id="add">+ Adicionar conta</button>
+    </header>
+    <div id="view"></div>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <form id="fconta" class="form" novalidate>
+    <h2 class="full" id="dlg-t">Nova conta</h2>
+    <div class="f full"><label for="c-nome">Nome</label><input type="text" id="c-nome" maxlength="60" placeholder="Ex.: Aluguel"></div>
+    <div class="f"><label for="c-valor">Valor (R$)</label><input type="text" id="c-valor" inputmode="decimal" placeholder="0,00"></div>
+    <div class="f"><label for="c-dia">Dia do vencimento</label><input type="number" id="c-dia" min="1" max="31" placeholder="5"></div>
+    <div class="f"><label for="c-tipo">Tipo</label><select id="c-tipo"><option value="casa">Conta da casa (dividida)</option><option value="pessoal">Conta pessoal</option></select></div>
+    <div class="f"><label for="c-pag" id="c-pag-l">Quem paga</label><select id="c-pag"></select></div>
+    <div class="f"><label for="c-quando">Quando acontece</label><select id="c-quando"><option value="sempre">Todo mês</option><option value="parcelas">Parcelada (tem fim)</option><option value="unico">Uma vez só</option></select></div>
+    <div class="f"><label for="c-inicio" id="c-inicio-l">A partir de</label><input type="month" id="c-inicio"></div>
+    <div class="f" id="c-parc-f"><label for="c-parc">Número de parcelas</label><input type="number" id="c-parc" min="1" max="600" placeholder="48"></div>
+    <div class="f" id="c-div-f"><label for="c-div">Como dividir</label><select id="c-div"><option value="padrao">Divisão do casal (Nossa renda)</option><option value="igual">Meio a meio</option><option value="pct">Percentual próprio</option></select></div>
+    <div class="f" id="c-pct-f"><label for="c-pct" id="c-pct-l">Parte (%)</label><input type="number" id="c-pct" min="0" max="100"></div>
+    <label class="ck full"><input type="checkbox" id="c-mor"> Conta de moradia</label>
+    <div class="full err" id="c-err" hidden></div>
+    <div class="acts full">
+      <button type="button" class="btn danger" id="c-del" hidden>Excluir</button><span class="grow"></span>
+      <button type="button" class="btn ghost" data-close>Cancelar</button><button type="submit" class="btn">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dcard">
+  <form id="fcard" class="form" novalidate>
+    <h2 class="full" id="k-t">Novo cartão</h2>
+    <div class="f full"><label for="k-nome">Nome do cartão</label><input type="text" id="k-nome" maxlength="40" placeholder="Ex.: Nubank da casa"></div>
+    <div class="f"><label for="k-limite">Limite (R$)</label><input type="text" id="k-limite" inputmode="decimal" placeholder="0,00"></div>
+    <div class="f"><label for="k-dia">Dia do vencimento</label><input type="number" id="k-dia" min="1" max="31" placeholder="10"></div>
+    <div class="f"><label for="k-tipo">A fatura é</label><select id="k-tipo"><option value="casa">Da casa (dividida)</option><option value="pessoal">Pessoal</option></select></div>
+    <div class="f"><label for="k-dono">Quem paga a fatura</label><select id="k-dono"></select></div>
+    <div class="f full"><label for="k-cor">Cor</label><select id="k-cor"><option value="grafite">Grafite</option><option value="laranja">Laranja</option><option value="roxo">Roxo</option><option value="azul">Azul</option><option value="verde">Verde</option><option value="vermelho">Vermelho</option></select></div>
+    <div class="full err" id="k-err" hidden></div>
+    <div class="acts full">
+      <button type="button" class="btn danger" id="k-del" hidden>Excluir</button><span class="grow"></span>
+      <button type="button" class="btn ghost" data-close>Cancelar</button><button type="submit" class="btn">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dres">
+  <form id="fres" class="form" novalidate>
+    <h2 class="full" id="r-t">Nova reserva</h2>
+    <div class="f full"><label for="r-nome">Nome</label><input type="text" id="r-nome" maxlength="40" placeholder="Ex.: Reserva de emergência"></div>
+    <div class="f"><label for="r-saldo">Quanto já tem guardado (R$)</label><input type="text" id="r-saldo" inputmode="decimal" placeholder="0,00"></div>
+    <div class="f"><label for="r-meta">Meta (R$, opcional)</label><input type="text" id="r-meta" inputmode="decimal" placeholder="0,00"></div>
+    <div class="f"><label for="r-a" id="r-a-l">Guarda por mês</label><input type="text" id="r-a" inputmode="decimal" placeholder="0,00"></div>
+    <div class="f"><label for="r-b" id="r-b-l">Guarda por mês</label><input type="text" id="r-b" inputmode="decimal" placeholder="0,00"></div>
+    <div class="full err" id="r-err" hidden></div>
+    <div class="acts full"><button type="button" class="btn danger" id="r-del" hidden>Excluir</button><span class="grow"></span><button type="button" class="btn ghost" data-close>Cancelar</button><button type="submit" class="btn">Salvar</button></div>
+  </form>
+</dialog>
+
+<dialog id="dfin">
+  <form id="ffin" class="form" novalidate>
+    <h2 class="full" id="f-t">Novo financiamento</h2>
+    <div class="f full"><label for="f-nome">Nome</label><input type="text" id="f-nome" maxlength="40" placeholder="Ex.: Financiamento da casa"></div>
+    <div class="f"><label for="f-saldo">Saldo devedor atual (R$)</label><input type="text" id="f-saldo" inputmode="decimal" placeholder="0,00"></div>
+    <div class="f"><label for="f-base">Saldo referente a</label><input type="month" id="f-base"></div>
+    <div class="f"><label for="f-taxa">Taxa de juros (%)</label><input type="text" id="f-taxa" inputmode="decimal" placeholder="9,5"></div>
+    <div class="f"><label for="f-unid">A taxa é</label><select id="f-unid"><option value="aa">Ao ano</option><option value="am">Ao mês</option></select></div>
+    <div class="f"><label for="f-sis">Sistema</label><select id="f-sis"><option value="sac">SAC (parcela diminui)</option><option value="price">Price (parcela fixa)</option></select></div>
+    <div class="f"><label for="f-prazo">Parcelas que faltam</label><input type="number" id="f-prazo" min="1" max="600" placeholder="360"></div>
+    <div class="f full"><label for="f-extra">Amortização extra todo mês (R$, opcional)</label><input type="text" id="f-extra" inputmode="decimal" placeholder="0,00"></div>
+    <div class="full err" id="f-err" hidden></div>
+    <div class="acts full"><button type="button" class="btn danger" id="f-del" hidden>Excluir</button><span class="grow"></span><button type="button" class="btn ghost" data-close>Cancelar</button><button type="submit" class="btn">Salvar</button></div>
+  </form>
+</dialog>
+
+<dialog id="dimp" class="wide">
+  <div class="form">
+    <h2 class="full">Importar arquivo</h2>
+    <div class="f full"><span class="l">O que é este arquivo?</span>
+      <div class="seg three" id="i-dest"><button data-dest="extrato">Extrato do banco</button><button data-dest="cartao">Fatura do cartão</button><button data-dest="contas">Planilha de contas</button></div></div>
+    <div class="f full"><label for="i-file">Arquivo (OFX, CSV ou Excel)</label><input type="file" id="i-file" accept=".ofx,.qfx,.csv,.txt,.xlsx,.xls"></div>
+    <div class="full" id="i-opts"></div>
+    <div class="full err" id="i-err" hidden></div>
+    <div class="full" id="i-prev"></div>
+    <div class="acts full"><span class="grow sub" id="i-info"></span>
+      <button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn" id="i-go" disabled>Importar</button></div>
+  </div>
+</dialog>
+
+<div id="toast" hidden></div>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="parse.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

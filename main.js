@@ -4,6 +4,10 @@ const path = require('path');
 
 app.commandLine.appendSwitch('lang', 'pt-BR');
 
+let autoUpdater = null;
+try { autoUpdater = require('electron-updater').autoUpdater; } catch { /* sem atualizador fora do app instalado */ }
+let updateReady = false;
+
 let win = null;
 let dataPath = null;
 let lastWritten = null;
@@ -58,6 +62,9 @@ ipcMain.handle('data:save', (_e, json) => {
   return true;
 });
 
+ipcMain.handle('app:version', () => app.getVersion());
+ipcMain.handle('update:status', () => updateReady);
+ipcMain.handle('update:install', () => { if (autoUpdater && updateReady) autoUpdater.quitAndInstall(); });
 ipcMain.handle('data:reveal', () => { if (dataPath) shell.showItemInFolder(dataPath); });
 
 function createWindow() {
@@ -75,5 +82,13 @@ app.whenReady().then(() => {
   const p = process.env.CASA_DATA || readCfg().dataPath;
   if (p && fs.existsSync(p)) setPath(p);
   createWindow();
+  // Atualização automática: baixa a versão nova publicada no GitHub e instala ao fechar o app.
+  if (app.isPackaged && autoUpdater) {
+    autoUpdater.on('update-downloaded', () => { updateReady = true; if (win && !win.isDestroyed()) win.webContents.send('update:ready'); });
+    autoUpdater.on('error', () => {});
+    const check = () => autoUpdater.checkForUpdates().catch(() => {});
+    check();
+    setInterval(check, 4 * 3600e3);
+  }
 });
 app.on('window-all-closed', () => app.quit());

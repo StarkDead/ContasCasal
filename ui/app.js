@@ -40,7 +40,7 @@ function faturaTotal(cid, ym) {
 }
 function bills(ym) {
   const l = Object.entries(D.contas).map(([id, x]) => ({ ...x, id, nome: String(x.nome || 'Sem nome'), valor: +x.valor || 0 })).filter(x => x.recorrente ? (!x.inicio || x.inicio <= ym) && (!x.fim || ym <= x.fim) : x.mes === ym).map(x => x.inicio && x.fim ? { ...x, parc: ymDiff(x.inicio, ym) + 1, parcN: ymDiff(x.inicio, x.fim) + 1 } : x);
-  for (const [id, c] of Object.entries(D.cartoes)) { const v = faturaTotal(id, ym); if (v > 0) l.push({ id: 'fat-' + id, nome: 'Fatura ' + c.nome, valor: v, dia: c.dia, tipo: c.tipo, pagador: c.dono, moradia: false, fatura: id }); }
+  for (const [id, c] of Object.entries(D.cartoes)) { const v = faturaTotal(id, ym); if (v > 0) l.push({ id: 'fat-' + id, nome: 'Fatura ' + c.nome, valor: v, dia: c.dia, tipo: c.tipo, pagador: c.dono, moradia: false, fatura: id, div: c.div, pctA: c.pctA }); }
   return l.sort((x, y) => (x.dia || 99) - (y.dia || 99) || x.nome.localeCompare(y.nome));
 }
 function calc(ym = S.ym) {
@@ -183,20 +183,24 @@ function vCasa() {
     <span class="dot ${x.pagador}"></span><button class="nm" data-edit="${esc(x.id)}">${esc(x.nome)}</button>${tags(x, k)}<span class="num">${brl(x.valor)}</span>${delConta(x)}</div>`).join('') : '<div class="empty">Nada por aqui neste mês.</div>'}</div></section>`;
   const prox = [0, 1, 2, 3, 4, 5].map(n => { const ym = ymAdd(S.ym, n), q = calc(ym); return { ym, q }; });
   const fut = Object.entries(D.contas).map(([id, x]) => ({ ...x, id, quando: x.recorrente ? x.inicio : x.mes })).filter(x => x.quando && x.quando > S.ym).sort((p, q) => p.quando.localeCompare(q.quando));
-  return `<section class="card"><div class="hd"><h2>Contas divididas <small>· ${ymNome(S.ym)} · ${brl(k.T)}</small></h2><button class="btn sm ghost" data-act="nova-dividida">+ Conta dividida</button></div>
-    ${k.casa.length ? `<div class="tblx"><table><thead><tr><th>Conta</th><th>Divisão</th><th class="r">Total</th><th class="r"><span class="dot a"></span> ${esc(c.nomes.a)}</th><th class="r"><span class="dot b"></span> ${esc(c.nomes.b)}</th><th>Quem paga</th><th></th></tr></thead><tbody>
-      ${k.casa.map(x => `<tr><td class="w"><button class="nm" data-edit="${esc(x.id)}">${esc(x.nome)}</button> ${x.parcN ? `<span class="tag">${x.parc}/${x.parcN}</span>` : ''}</td><td>${divLbl(x, k)}</td><td class="r">${brl(x.valor)}</td><td class="r">${brl(k.parte(x, 'a'))}</td><td class="r">${brl(k.parte(x, 'b'))}</td><td><span class="dot ${x.pagador}"></span> ${esc(c.nomes[x.pagador])}</td><td>${delConta(x)}</td></tr>`).join('')}
-      <tr class="tot"><td>Total</td><td></td><td class="r">${brl(k.T)}</td><td class="r">${brl(k.devido.a)}</td><td class="r">${brl(k.devido.b)}</td><td></td><td></td></tr></tbody></table></div>
-      <p class="sub" style="margin:12px 0 0">Clique no nome para mudar a divisão de uma conta: meio a meio, percentual próprio ou a divisão do casal definida em Nossa renda.</p>`
-      : `<div class="empty">Nenhuma conta dividida em ${ymNome(S.ym)}. Lance aqui financiamento do carro, da casa, condomínio e o que mais vocês dividem.</div>`}</section>
+  const pa = Math.round(cfg().divisao === 'igual' ? 50 : k.fracA({}) * 100);
+  const sel = x => `<select data-divsel="${esc(x.id)}" aria-label="Como dividir ${esc(x.nome)}"><option value="padrao" ${!x.div || x.div === 'padrao' ? 'selected' : ''}>Divisão do casal (${pa}/${100 - pa})</option><option value="igual" ${x.div === 'igual' ? 'selected' : ''}>Meio a meio</option>${x.div === 'pct' ? `<option value="pct" selected>${Math.round(k.fracA(x) * 100)}% / ${100 - Math.round(k.fracA(x) * 100)}%</option>` : ''}${x.fatura ? '' : '<option value="editar">Outro percentual…</option>'}</select>`;
+  const cel = (x, w) => x.tipo === 'casa' ? brl(k.parte(x, w)) : x.pagador === w ? brl(x.valor) : '<span class="sub">—</span>';
+  return `<section class="card"><div class="hd"><h2>Contas de ${ymNome(S.ym)} <small>· marque quais vocês dividem</small></h2><button class="btn sm ghost" data-act="nova-pessoal">+ Conta pessoal</button><button class="btn sm ghost" data-act="nova-dividida">+ Conta dividida</button></div>
+    ${k.list.length ? `<div class="tblx"><table><thead><tr><th>Conta</th><th class="r">Valor</th><th>Dividir?</th><th>Como divide</th><th class="r"><span class="dot a"></span> ${esc(c.nomes.a)}</th><th class="r"><span class="dot b"></span> ${esc(c.nomes.b)}</th><th>Quem paga</th><th></th></tr></thead><tbody>
+      ${k.list.map(x => `<tr><td class="w"><button class="nm" data-edit="${esc(x.id)}">${esc(x.nome)}</button> ${x.parcN ? `<span class="tag">${x.parc}/${x.parcN}</span>` : ''}${x.fatura ? '<span class="tag">cartão</span>' : ''}</td><td class="r">${brl(x.valor)}</td>
+        <td><label class="sw"><input type="checkbox" data-divtog="${esc(x.id)}" ${x.tipo === 'casa' ? 'checked' : ''}><span>${x.tipo === 'casa' ? 'Dividida' : 'Pessoal'}</span></label></td>
+        <td>${x.tipo === 'casa' ? sel(x) : '<span class="sub">não divide</span>'}</td><td class="r">${cel(x, 'a')}</td><td class="r">${cel(x, 'b')}</td><td><span class="dot ${x.pagador}"></span> ${esc(c.nomes[x.pagador])}</td><td>${delConta(x)}</td></tr>`).join('')}
+      <tr class="tot"><td>Total</td><td class="r">${brl(sum(k.list))}</td><td></td><td></td><td class="r">${brl(r2(k.devido.a + k.pessoal.a))}</td><td class="r">${brl(r2(k.devido.b + k.pessoal.b))}</td><td></td><td></td></tr></tbody></table></div>
+      <p class="sub" style="margin:12px 0 0">Divididas: ${brl(k.T)} (${esc(c.nomes.a)} ${brl(k.devido.a)} · ${esc(c.nomes.b)} ${brl(k.devido.b)}). Pessoais: ${esc(c.nomes.a)} ${brl(k.pessoal.a)} · ${esc(c.nomes.b)} ${brl(k.pessoal.b)}. A fatura do cartão também pode ser marcada como pessoal ou dividida aqui.</p>`
+      : `<div class="empty">Nenhuma conta em ${ymNome(S.ym)}. Lance aqui financiamento do carro, da casa, condomínio, e marque em cada uma se vocês dividem ou se é pessoal.</div>`}</section>
   <section class="card"><div class="hd"><h2>Próximos meses</h2><button class="btn sm ghost" data-act="futura">+ Lançar conta futura</button></div>
     <div class="tblx" style="margin-top:10px"><table><thead><tr><th></th>${prox.map(p => `<th class="r">${MESES[+p.ym.slice(5) - 1].slice(0, 3)}/${p.ym.slice(2, 4)}</th>`).join('')}</tr></thead><tbody>
       <tr><td>Contas da casa</td>${prox.map(p => `<td class="r">${brl(p.q.T)}</td>`).join('')}</tr>
       ${['a', 'b'].map(w => `<tr><td><span class="dot ${w}"></span> Parte de ${esc(c.nomes[w])}</td>${prox.map(p => `<td class="r">${brl(p.q.devido[w])}</td>`).join('')}</tr><tr><td><span class="dot ${w}"></span> Pessoais de ${esc(c.nomes[w])}</td>${prox.map(p => `<td class="r">${brl(p.q.pessoal[w])}</td>`).join('')}</tr>`).join('')}
     </tbody></table></div>
     <div class="sec">Contas que ainda vão começar</div>
-    <div class="rows">${fut.length ? fut.map(x => `<div class="row"><span class="dot ${x.pagador}"></span><button class="nm" data-edit="${esc(x.id)}">${esc(x.nome)}</button><span class="tag">${x.recorrente ? 'a partir de ' : ''}${ymNome(x.quando)}/${x.quando.slice(0, 4)}</span>${x.recorrente && x.fim ? `<span class="tag">${ymDiff(x.inicio, x.fim) + 1} parcelas</span>` : ''}<span class="tag">${x.tipo === 'casa' ? 'da casa' : 'pessoal'}</span><span class="num">${brl(+x.valor || 0)}</span>${delConta(x)}</div>`).join('') : `<div class="empty">Nenhuma conta futura lançada. Use “Lançar conta futura” para IPVA, matrícula, parcelas que começam depois…</div>`}</div></section>
-  ${grupo('Pessoais de ' + esc(c.nomes.a), k.list.filter(x => x.tipo === 'pessoal' && x.pagador === 'a'))}${grupo('Pessoais de ' + esc(c.nomes.b), k.list.filter(x => x.tipo === 'pessoal' && x.pagador === 'b'))}`;
+    <div class="rows">${fut.length ? fut.map(x => `<div class="row"><span class="dot ${x.pagador}"></span><button class="nm" data-edit="${esc(x.id)}">${esc(x.nome)}</button><span class="tag">${x.recorrente ? 'a partir de ' : ''}${ymNome(x.quando)}/${x.quando.slice(0, 4)}</span>${x.recorrente && x.fim ? `<span class="tag">${ymDiff(x.inicio, x.fim) + 1} parcelas</span>` : ''}<span class="tag">${x.tipo === 'casa' ? 'da casa' : 'pessoal'}</span><span class="num">${brl(+x.valor || 0)}</span>${delConta(x)}</div>`).join('') : `<div class="empty">Nenhuma conta futura lançada. Use “Lançar conta futura” para IPVA, matrícula, parcelas que começam depois…</div>`}</div></section>`;
 }
 
 function vReserva() {
@@ -267,7 +271,7 @@ function vRenda() {
 function vDados() {
   return `<section class="card"><h2>Arquivo de dados</h2>
     <p class="sub" style="margin:4px 0 14px">Tudo o que vocês lançam fica neste arquivo. Para os dois verem as mesmas contas, guarde-o numa pasta sincronizada (Google Drive, OneDrive ou Dropbox) e abra o mesmo arquivo nos dois computadores.</p>
-    <div class="path">${esc(S.path || '')}</div>
+    <div class="path">${esc(S.path || '')}</div>${S.versao ? `<p class="sub" style="margin:10px 0 0">Casa em Dia versão ${esc(S.versao)}. O app procura atualizações sozinho ao abrir.</p>` : ''}
     <div class="acts" style="justify-content:flex-start;margin-top:14px"><button class="btn ghost" data-act="reveal">Mostrar na pasta</button><button class="btn ghost" data-act="abrir">Abrir outro arquivo</button><button class="btn ghost" data-act="novo">Criar arquivo novo</button></div>
     <p class="sub" style="margin:16px 0 0">Evitem editar ao mesmo tempo nos dois computadores: a pasta sincronizada pode criar uma cópia em conflito. O app relê o arquivo sozinho quando o outro salva.</p></section>
   <section class="card"><h2>Apagar dados</h2><p class="sub" style="margin:4px 0 14px">Apaga do arquivo compartilhado, para os dois. Não dá para desfazer.</p>
@@ -289,9 +293,10 @@ function render(force) {
   const v = $('#view'), usable = S.ready && S.path && !S.loadErr; $('#add').disabled = $('#imp').disabled = !usable;
   if (!force && S.view === 'renda' && v.contains(document.activeElement) && document.activeElement.matches('input,select')) return;
   const views = { reserva: vReserva, financ: vFinanc, visao: vVisao, fluxo: vFluxo, cartoes: vCartoes, casa: vCasa, renda: vRenda, dados: vDados };
-  v.innerHTML = !S.ready ? `<div class="card empty">Abrindo…</div>` : !S.path ? vBoasVindas()
+  const upd = S.update ? `<div class="banner upd"><span>Uma versão nova do Casa em Dia foi baixada.</span><button class="btn sm" data-act="atualizar">Reiniciar e atualizar</button></div>` : '';
+  v.innerHTML = upd + (!S.ready ? `<div class="card empty">Abrindo…</div>` : !S.path ? vBoasVindas()
     : S.loadErr ? `<div class="banner">${S.loadErr === 'missing' ? 'Não encontrei o arquivo de dados. Ele pode ter sido movido ou a pasta sincronizada ainda não baixou.' : 'Não consegui ler o arquivo de dados. Ele pode estar no meio de uma sincronização; nada foi alterado.'}</div>${vDados()}<div><button class="btn" data-act="recarregar">Tentar de novo</button></div>`
-      : (views[S.view] || vVisao)();
+      : (views[S.view] || vVisao)());
 }
 
 /* ---------- dados ---------- */
@@ -325,7 +330,7 @@ function openConta(id, pre) {
   const x = id ? D.contas[id] : null; if (id && !x) return; S.editing = id || null; pre = pre || {};
   $('#dlg-t').textContent = x ? 'Editar conta' : pre.titulo || 'Nova conta';
   $('#c-nome').value = x ? x.nome : ''; $('#c-valor').value = x ? money(x.valor) : ''; $('#c-dia').value = x && x.dia || '';
-  $('#c-tipo').value = x ? x.tipo : 'casa'; fillPessoas($('#c-pag')); $('#c-pag').value = x ? x.pagador : S.eu;
+  $('#c-tipo').value = x ? x.tipo : pre.tipo || 'casa'; fillPessoas($('#c-pag')); $('#c-pag').value = x ? x.pagador : S.eu;
   $('#c-quando').value = x ? (!x.recorrente ? 'unico' : x.fim ? 'parcelas' : 'sempre') : pre.quando || 'sempre';
   $('#c-inicio').value = x ? (x.recorrente ? x.inicio || '' : x.mes || S.ym) : pre.inicio || '';
   $('#c-parc').value = x && x.inicio && x.fim ? ymDiff(x.inicio, x.fim) + 1 : '';
@@ -514,6 +519,10 @@ document.addEventListener('submit', e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.id === 'divisao') $('#pct-f').hidden = t.value !== 'custom';
+  if (t.dataset.divtog) { const id = t.dataset.divtog, tipo = t.checked ? 'casa' : 'pessoal';
+    mutate(d => { const o = id.startsWith('fat-') ? d.cartoes[id.slice(4)] : d.contas[id]; if (o) o.tipo = tipo; }, tipo === 'casa' ? 'Conta marcada como dividida' : 'Conta marcada como pessoal'); return; }
+  if (t.dataset.divsel) { const id = t.dataset.divsel, v = t.value; if (v === 'pct') return; if (v === 'editar') { render(true); openConta(id); $('#c-div').value = 'pct'; tipoLbl(); return; }
+    mutate(d => { const o = id.startsWith('fat-') ? d.cartoes[id.slice(4)] : d.contas[id]; if (o) { o.div = v; o.pctA = null; } }, 'Divisão atualizada'); return; }
   if (t.dataset.link) { const id = t.dataset.link, alvo = t.value;
     mutate(d => { const l = d.lanc[id]; if (!l) return; const mes = mesDe(d, l.data.slice(0, 7)); if (l.conta) delete mes.pagas[l.conta]; if (alvo) { l.conta = alvo; mes.pagas[alvo] = true; } else delete l.conta; }, alvo ? 'Conta marcada como paga' : 'Vínculo removido'); }
 });
@@ -547,6 +556,8 @@ document.addEventListener('click', e => {
       if (w === 'tudo') { for (const k of Object.keys(x)) delete x[k]; Object.assign(x, vazio()); return 'Tudo apagado. O arquivo está zerado.'; }
     }); }
   else if (d.act === 'futura') openConta(null, { titulo: 'Lançar conta futura', quando: 'unico', inicio: ymAdd(S.ym, 1) });
+  else if (d.act === 'nova-pessoal') openConta(null, { titulo: 'Nova conta pessoal', tipo: 'pessoal' });
+  else if (d.act === 'atualizar') store.installUpdate && store.installUpdate();
   else if (d.act === 'nova-dividida') openConta(null, { titulo: 'Nova conta dividida', div: 'igual' });
   else if (d.redit) openRes(d.redit);
   else if (d.fedit) openFin(d.fedit);
@@ -575,5 +586,6 @@ addEventListener('hashchange', route);
 
 const tema = ls.get('tema'); if (tema === 'light' || tema === 'dark') document.documentElement.dataset.theme = tema;
 route();
+if (store.onUpdate) { store.onUpdate(() => { S.update = true; render(); }); store.updateStatus().then(r => { if (r) { S.update = true; render(); } }); store.version().then(v => { S.versao = v; }); }
 store.onChanged(() => { q = q.then(load).then(() => render()); });
 load().then(() => { S.ready = true; render(true); }, () => { S.ready = true; S.loadErr = 'read'; render(true); });

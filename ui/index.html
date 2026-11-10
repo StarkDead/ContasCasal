@@ -55,7 +55,7 @@
     <div class="f full"><label for="c-nome">Nome</label><input type="text" id="c-nome" maxlength="60" placeholder="Ex.: Aluguel"></div>
     <div class="f"><label for="c-valor">Valor (R$)</label><input type="text" id="c-valor" inputmode="decimal" placeholder="0,00"></div>
     <div class="f"><label for="c-dia">Dia do vencimento</label><input type="number" id="c-dia" min="1" max="31" placeholder="5"></div>
-    <div class="f"><label for="c-tipo">Tipo</label><select id="c-tipo"><option value="casa">Conta da casa (dividida)</option><option value="pessoal">Conta pessoal</option></select></div>
+    <div class="f"><label for="c-tipo">Vocês dividem?</label><select id="c-tipo"><option value="casa">Sim, dividida entre nós</option><option value="pessoal">Não, é pessoal</option></select></div>
     <div class="f"><label for="c-pag" id="c-pag-l">Quem paga</label><select id="c-pag"></select></div>
     <div class="f"><label for="c-quando">Quando acontece</label><select id="c-quando"><option value="sempre">Todo mês</option><option value="parcelas">Parcelada (tem fim)</option><option value="unico">Uma vez só</option></select></div>
     <div class="f"><label for="c-inicio" id="c-inicio-l">A partir de</label><input type="month" id="c-inicio"></div>
@@ -77,7 +77,7 @@
     <div class="f full"><label for="k-nome">Nome do cartão</label><input type="text" id="k-nome" maxlength="40" placeholder="Ex.: Nubank da casa"></div>
     <div class="f"><label for="k-limite">Limite (R$)</label><input type="text" id="k-limite" inputmode="decimal" placeholder="0,00"></div>
     <div class="f"><label for="k-dia">Dia do vencimento</label><input type="number" id="k-dia" min="1" max="31" placeholder="10"></div>
-    <div class="f"><label for="k-tipo">A fatura é</label><select id="k-tipo"><option value="casa">Da casa (dividida)</option><option value="pessoal">Pessoal</option></select></div>
+    <div class="f"><label for="k-tipo">A fatura é</label><select id="k-tipo"><option value="casa">Dividida entre nós</option><option value="pessoal">Pessoal (não divide)</option></select></div>
     <div class="f"><label for="k-dono">Quem paga a fatura</label><select id="k-dono"></select></div>
     <div class="f full"><label for="k-cor">Cor</label><select id="k-cor"><option value="grafite">Grafite</option><option value="laranja">Laranja</option><option value="roxo">Roxo</option><option value="azul">Azul</option><option value="verde">Verde</option><option value="vermelho">Vermelho</option></select></div>
     <div class="full err" id="k-err" hidden></div>

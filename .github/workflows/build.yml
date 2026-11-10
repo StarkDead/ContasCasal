@@ -1,9 +1,14 @@
 name: Gerar instalador do Windows
 
+# A cada mudança no código: gera o instalador para teste (fica em Artifacts).
+# Ao clicar em "Run workflow": publica a versão nova, que os apps instalados baixam sozinhos.
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   windows:
@@ -15,7 +20,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run dist
+      - name: Numerar a versão
+        run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
+      - name: Gerar instalador
+        if: github.event_name == 'push'
+        run: npm run dist
+      - name: Gerar e publicar a versão
+        if: github.event_name == 'workflow_dispatch'
+        run: npx electron-builder --win nsis --x64 --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
           name: Casa-em-Dia-Instalador

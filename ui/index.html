@@ -53,7 +53,7 @@
   <form id="fconta" class="form" novalidate>
     <h2 class="full" id="dlg-t">Nova conta</h2>
     <div class="f full"><label for="c-nome">Nome</label><input type="text" id="c-nome" maxlength="60" placeholder="Ex.: Aluguel"></div>
-    <div class="f"><label for="c-valor">Valor (R$)</label><input type="text" id="c-valor" inputmode="decimal" placeholder="0,00"></div>
+    <div class="f"><label for="c-valor">Valor previsto (R$)</label><input type="text" id="c-valor" inputmode="decimal" placeholder="0,00"></div>
     <div class="f"><label for="c-dia">Dia do vencimento</label><input type="number" id="c-dia" min="1" max="31" placeholder="5"></div>
     <div class="f"><label for="c-tipo">Vocês dividem?</label><select id="c-tipo"><option value="casa">Sim, dividida entre nós</option><option value="pessoal">Não, é pessoal</option></select></div>
     <div class="f"><label for="c-pag" id="c-pag-l">Quem paga</label><select id="c-pag"></select></div>
@@ -62,6 +62,7 @@
     <div class="f" id="c-parc-f"><label for="c-parc">Número de parcelas</label><input type="number" id="c-parc" min="1" max="600" placeholder="48"></div>
     <div class="f" id="c-div-f"><label for="c-div">Como dividir</label><select id="c-div"><option value="padrao">Divisão do casal (Nossa renda)</option><option value="igual">Meio a meio</option><option value="pct">Percentual próprio</option></select></div>
     <div class="f" id="c-pct-f"><label for="c-pct" id="c-pct-l">Parte (%)</label><input type="number" id="c-pct" min="0" max="100"></div>
+    <div class="f full" id="c-real-f"><label for="c-real" id="c-real-l">Valor real neste mês</label><input type="text" id="c-real" inputmode="decimal" placeholder="deixe vazio para usar o valor previsto"></div>
     <label class="ck full"><input type="checkbox" id="c-mor"> Conta de moradia</label>
     <div class="full err" id="c-err" hidden></div>
     <div class="acts full">

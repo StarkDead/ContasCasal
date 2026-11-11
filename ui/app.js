@@ -40,6 +40,7 @@ function faturaTotal(cid, ym) {
 }
 function bills(ym) {
   const l = Object.entries(D.contas).map(([id, x]) => ({ ...x, id, nome: String(x.nome || 'Sem nome'), valor: +x.valor || 0 })).filter(x => x.recorrente ? (!x.inicio || x.inicio <= ym) && (!x.fim || ym <= x.fim) : x.mes === ym).map(x => x.inicio && x.fim ? { ...x, parc: ymDiff(x.inicio, ym) + 1, parcN: ymDiff(x.inicio, x.fim) + 1 } : x);
+  const ov = (D.meses[ym] || {}).valores || {}; l.forEach((x, i) => { if (ov[x.id] != null) l[i] = { ...x, valor: +ov[x.id] || 0, previsto: x.valor, real: true }; });
   for (const [id, c] of Object.entries(D.cartoes)) { const v = faturaTotal(id, ym); if (v > 0) l.push({ id: 'fat-' + id, nome: 'Fatura ' + c.nome, valor: v, dia: c.dia, tipo: c.tipo, pagador: c.dono, moradia: false, fatura: id, div: c.div, pctA: c.pctA }); }
   for (const [id, f] of Object.entries(D.financ)) { if (f.gerar === false) continue; const pm = parcelaFin(f, ym); if (pm) l.push({ id: 'fin-' + id, nome: f.nome, valor: pm.valor, dia: +f.dia || 0, tipo: f.tipo || 'casa', pagador: f.pagador || 'a', moradia: !!f.moradia, div: f.div || 'igual', pctA: null, fin: id, recorrente: true, parc: pm.parc, parcN: pm.parcN }); }
   return l.sort((x, y) => (x.dia || 99) - (y.dia || 99) || x.nome.localeCompare(y.nome));
@@ -190,7 +191,7 @@ function vCasa() {
   const cel = (x, w) => x.tipo === 'casa' ? brl(k.parte(x, w)) : x.pagador === w ? brl(x.valor) : '<span class="sub">—</span>';
   return `<section class="card"><div class="hd"><h2>Contas de ${ymNome(S.ym)} <small>· marque quais vocês dividem</small></h2><button class="btn sm ghost" data-act="nova-pessoal">+ Conta pessoal</button><button class="btn sm ghost" data-act="nova-dividida">+ Conta dividida</button></div>
     ${k.list.length ? `<div class="tblx"><table><thead><tr><th>Conta</th><th class="r">Valor</th><th>Dividir?</th><th>Como divide</th><th class="r"><span class="dot a"></span> ${esc(c.nomes.a)}</th><th class="r"><span class="dot b"></span> ${esc(c.nomes.b)}</th><th>Quem paga</th><th></th></tr></thead><tbody>
-      ${k.list.map(x => `<tr><td class="w"><button class="nm" data-edit="${esc(x.id)}">${esc(x.nome)}</button> ${x.parcN ? `<span class="tag">${x.parc}/${x.parcN}</span>` : ''}${x.fatura ? '<span class="tag">cartão</span>' : ''}${x.fin ? '<span class="tag">financiamento</span>' : ''}</td><td class="r">${brl(x.valor)}</td>
+      ${k.list.map(x => `<tr><td class="w"><button class="nm" data-edit="${esc(x.id)}">${esc(x.nome)}</button> ${x.parcN ? `<span class="tag">${x.parc}/${x.parcN}</span>` : ''}${x.fatura ? '<span class="tag">cartão</span>' : ''}${x.fin ? '<span class="tag">financiamento</span>' : ''}${x.real ? `<span class="tag ok" title="Previsto: ${brl(x.previsto)}">valor real</span>` : ''}</td><td class="r">${brl(x.valor)}</td>
         <td><label class="sw"><input type="checkbox" data-divtog="${esc(x.id)}" ${x.tipo === 'casa' ? 'checked' : ''}><span>${x.tipo === 'casa' ? 'Dividida' : 'Pessoal'}</span></label></td>
         <td>${x.tipo === 'casa' ? sel(x) : '<span class="sub">não divide</span>'}</td><td class="r">${cel(x, 'a')}</td><td class="r">${cel(x, 'b')}</td><td><span class="dot ${x.pagador}"></span> ${esc(c.nomes[x.pagador])}</td><td>${delConta(x)}</td></tr>`).join('')}
       <tr class="tot"><td>Total</td><td class="r">${brl(sum(k.list))}</td><td></td><td></td><td class="r">${brl(r2(k.devido.a + k.pessoal.a))}</td><td class="r">${brl(r2(k.devido.b + k.pessoal.b))}</td><td></td><td></td></tr></tbody></table></div>
@@ -368,6 +369,7 @@ function openConta(id, pre) {
   $('#c-parc').value = x && x.inicio && x.fim ? ymDiff(x.inicio, x.fim) + 1 : '';
   $('#c-div').value = x ? x.div || 'padrao' : pre.div || 'padrao'; $('#c-pct').value = x && x.pctA != null ? x.pctA : 50;
   $('#c-mor').checked = x ? !!x.moradia : false;
+  const rv = x ? ((D.meses[S.ym] || {}).valores || {})[id] : null; $('#c-real-f').hidden = !x || (!x.recorrente && true); $('#c-real-l').textContent = `Valor real em ${ymNome(S.ym)} (se veio diferente)`; $('#c-real').value = rv != null ? money(rv) || '0' : '';
   resetDel($('#c-del'), !x); $('#c-err').hidden = true; tipoLbl(); $('#dlg').showModal();
 }
 const resetDel = (b, hide) => { b.hidden = hide; b.textContent = 'Excluir'; b.dataset.sure = ''; };
@@ -392,7 +394,10 @@ $('#fconta').onsubmit = e => {
   if (m2) { err.textContent = m2; err.hidden = false; return; }
   const data = { nome, valor, dia, tipo: $('#c-tipo').value, pagador: $('#c-pag').value, moradia: $('#c-mor').checked, recorrente: q !== 'unico', mes: q === 'unico' ? (okYm ? ini : S.ym) : null,
     inicio: q !== 'unico' && okYm ? ini : null, fim: q === 'parcelas' ? ymAdd(ini, np - 1) : null, div, pctA: div === 'pct' ? pctA : null };
-  mutate(d => { d.contas[id || uid()] = data; }, 'Conta salva'); $('#dlg').close();
+  const realTxt = $('#c-real').value.trim(), real = realTxt ? inMoney(realTxt) : null, ym = S.ym;
+  if (real !== null && isNaN(real)) { err.textContent = 'Confira o valor real do mês: use números como 812,40.'; err.hidden = false; return; }
+  mutate(d => { const cid = id || uid(), old = d.contas[cid]; d.contas[cid] = old && old.plano ? { ...data, plano: true } : data;
+    if (id) { const m = mesDe(d, ym); m.valores = m.valores || {}; if (real !== null) m.valores[cid] = real; else delete m.valores[cid]; } }, 'Conta salva'); $('#dlg').close();
 };
 
 /* ---------- cartão ---------- */
@@ -460,7 +465,7 @@ function autoFatura() { if (W.dest !== 'cartao' || W.fatFixa || !W.kind) return;
 const pkey = x => Parse.norm(x.parc.base) + '|' + Math.abs(x.valor).toFixed(2) + '|' + x.parc.n;
 let W = null;
 function openImp(dest) {
-  W = { dest: dest || 'extrato', kind: null, name: '', ofx: [], t: null, map: {}, pessoa: S.eu, cartao: Object.keys(D.cartoes)[0] || '', fatura: S.ym, items: [], skipped: 0, proj: true };
+  W = { dest: dest || 'extrato', kind: null, name: '', ofx: [], t: null, map: {}, pessoa: S.eu, cartao: Object.keys(D.cartoes)[0] || '', fatura: S.ym, items: [], skipped: 0, proj: true, subst: true };
   $('#i-file').value = ''; $('#i-err').hidden = true; renderImp(); $('#dimp').showModal();
 }
 function impErr(t) { const e = $('#i-err'); e.textContent = t || ''; e.hidden = !t; }
@@ -477,12 +482,12 @@ async function readFile(f) {
       if (ext === 'ofx' || ext === 'qfx' || /<OFX>|<STMTTRN>/i.test(text)) { W.ofx = Parse.ofx(text); W.kind = 'ofx'; if (!W.ofx.length) throw new Error('vazio'); }
       else { W.t = Parse.table(Parse.csv(text)); W.kind = 'table'; }
     }
-    if (W.kind === 'table') { if (!W.t.rows.length) throw new Error('vazio'); W.map = Parse.guess(W.t); }
+    if (W.kind === 'table') { if (!W.t.rows.length) throw new Error('vazio'); W.map = Parse.guess(W.t); const g = planoGrupos(W.t); if (g) { W.kind = 'plano'; W.grupos = g; } }
   } catch (e) { W.kind = null; impErr('Não consegui ler este arquivo. Confira se é um OFX, CSV ou Excel baixado do banco e se tem lançamentos.'); }
   buildItems(); autoFatura(); renderImp();
 }
 function buildItems() {
-  W.items = []; W.skipped = 0; if (!W.kind) return;
+  W.items = []; W.skipped = 0; if (!W.kind || W.kind === 'plano') return;
   const ano = +S.ym.slice(0, 4), m = W.map, c = cfg(); let raw = [];
   if (W.kind === 'ofx') raw = W.ofx.map(x => W.dest === 'contas' ? { desc: x.desc, valor: Math.abs(x.valor), dia: +x.data.slice(8), pagador: W.pessoa } : { ...x });
   else for (const r of W.t.rows) {
@@ -503,13 +508,14 @@ function buildItems() {
   W.items = raw.map(x => ({ ...x, on: !(W.dest === 'cartao' && x.valor > 0 && /pagamento/i.test(x.desc)), parc: W.dest === 'cartao' && x.valor < 0 ? Parse.parcela(x.desc) : null }));
 }
 function renderImp() {
+  $('#i-dest').parentElement.hidden = W.kind === 'plano'; if (W.kind === 'plano') return renderPlano();
   const c = cfg(), cards = Object.entries(D.cartoes);
   document.querySelectorAll('#i-dest button').forEach(b => b.classList.toggle('on', b.dataset.dest === W.dest));
   const pes = lbl => `<div class="f"><label for="i-pessoa">${lbl}</label><select id="i-pessoa">${['a', 'b'].map(p => `<option value="${p}" ${W.pessoa === p ? 'selected' : ''}>${esc(c.nomes[p])}</option>`).join('')}</select></div>`;
   const col = (k, lbl, opt) => `<div class="f"><label for="m-${k}">${lbl}</label><select id="m-${k}" data-map="${k}">${opt ? '<option value="-1">(não tem)</option>' : ''}${W.t.header.map((h, i) => `<option value="${i}" ${W.map[k] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>`;
   let o = '';
   if (W.dest === 'extrato') o += pes('De quem é a conta bancária');
-  if (W.dest === 'cartao') o += cards.length ? `<div class="f"><label for="i-cartao">Cartão</label><select id="i-cartao">${cards.map(([id, x]) => `<option value="${esc(id)}" ${W.cartao === id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></div><div class="f"><label for="i-fatura">Fatura que vence em</label><input type="month" id="i-fatura" value="${esc(W.fatura)}"></div><label class="ck"><input type="checkbox" id="i-proj" ${W.proj ? 'checked' : ''}> Lançar as parcelas que faltam nas próximas faturas</label>${W.fatAuto ? `<div class="sub">Vencimento em <b>${String(D.cartoes[W.cartao].dia || 1).padStart(2, '0')}/${W.fatura.slice(5)}/${W.fatura.slice(0, 4)}</b>, calculado pelas datas das compras. Ajuste o mês se não bater.</div>` : ''}` : `<div class="err">Cadastre o cartão primeiro, na tela Cartões.</div>`;
+  if (W.dest === 'cartao') o += cards.length ? `<div class="f"><label for="i-cartao">Cartão</label><select id="i-cartao">${cards.map(([id, x]) => `<option value="${esc(id)}" ${W.cartao === id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></div><div class="f"><label for="i-fatura">Fatura que vence em</label><input type="month" id="i-fatura" value="${esc(W.fatura)}"></div><label class="ck"><input type="checkbox" id="i-proj" ${W.proj ? 'checked' : ''}> Lançar as parcelas que faltam nas próximas faturas</label><label class="ck"><input type="checkbox" id="i-subst" ${W.subst ? 'checked' : ''}> Substituir as previsões desta fatura pelo que está no arquivo</label>${W.fatAuto ? `<div class="sub">Vencimento em <b>${String(D.cartoes[W.cartao].dia || 1).padStart(2, '0')}/${W.fatura.slice(5)}/${W.fatura.slice(0, 4)}</b>, calculado pelas datas das compras. Ajuste o mês se não bater.</div>` : ''}` : `<div class="err">Cadastre o cartão primeiro, na tela Cartões.</div>`;
   if (W.dest === 'contas') o += pes('Quem paga (quando a planilha não diz)');
   if (W.kind === 'table') o += W.dest === 'contas' ? col('desc', 'Coluna do nome') + col('valor', 'Coluna do valor') + col('dia', 'Coluna do vencimento', 1) + col('quem', 'Coluna de quem paga', 1) : col('data', 'Coluna da data') + col('desc', 'Coluna da descrição') + col('valor', 'Coluna do valor');
   $('#i-opts').innerHTML = `<div class="opts">${o}</div>`;
@@ -521,20 +527,99 @@ function renderImp() {
   const rows = W.items.slice(0, 300).map((x, i) => `<tr class="${x.on ? '' : 'off'}"><td><input type="checkbox" data-item="${i}" ${x.on ? 'checked' : ''} aria-label="Incluir ${esc(x.desc)}"></td>${W.dest === 'contas' ? `<td class="w">${esc(x.desc)}</td><td>${x.dia || '—'}</td><td>${esc(c.nomes[x.pagador])}</td><td class="r">${brl(x.valor)}</td>` : `<td>${x.data.slice(8)}/${x.data.slice(5, 7)}/${x.data.slice(0, 4)}</td><td class="w">${esc(x.desc)}${x.parc ? ` <span class="tag">parcela ${x.parc.k} de ${x.parc.n}</span>` : ''}</td><td class="r">${brl(W.dest === 'cartao' ? -x.valor : x.valor)}</td>`}</tr>`).join('');
   $('#i-prev').innerHTML = `<div class="tbl"><table><thead><tr><th></th>${W.dest === 'contas' ? '<th>Conta</th><th>Dia</th><th>Quem paga</th><th class="r">Valor</th>' : `<th>Data</th><th>Descrição</th><th class="r">${W.dest === 'cartao' ? 'Compra' : 'Valor'}</th>`}</tr></thead><tbody>${rows}</tbody></table></div>${W.items.length > 300 ? `<p class="sub">Mostrando as 300 primeiras de ${W.items.length} linhas; todas as marcadas serão importadas.</p>` : ''}`;
 }
+/* ---------- planilha de planejamento (data, mes, conta, categoria, parcela, valor_total, minha_parte_pct, quem_paga, forma_pagamento) ---------- */
+const hash = t => { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0; return h.toString(36); };
+function planoGrupos(t) {
+  const h = t.header.map(x => Parse.norm(x).trim()), ix = n => h.indexOf(n), need = ['mes', 'conta', 'valor_total', 'forma_pagamento'];
+  if (need.some(n => ix(n) < 0)) return null;
+  const col = (r, n) => ix(n) < 0 ? '' : String(r[ix(n)] ?? '').trim(), g = {};
+  for (const r of t.rows) {
+    const mes = col(r, 'mes').slice(0, 7), valor = Math.abs(Parse.num(col(r, 'valor_total'))), nome = col(r, 'conta'); if (!/^\d{4}-\d{2}$/.test(mes) || !(valor > 0) || !nome) continue;
+    const forma = col(r, 'forma_pagamento'), quem = col(r, 'quem_paga') || 'Você', pp = Parse.num(col(r, 'minha_parte_pct')), pct = isNaN(pp) ? 1 : pp, cat = col(r, 'categoria');
+    const pm = col(r, 'parcela').match(/^(\d{1,3})\s*\/\s*(\d{1,3})$/), data = Parse.date(col(r, 'data')) || mes + '-01', key = [nome, forma, quem, pct].join('|');
+    const cm = Parse.norm(forma).match(/^cartao\s+(.+)$/), rep = /repasse/i.test(quem) || (pct === 0 && !/voc/i.test(quem));
+    const tipo = cm ? 'cartao' : rep ? 'repasse' : /financiamento/i.test(nome) ? 'fin' : 'conta';
+    (g[key] = g[key] || { key, nome, forma, quem, pct, cat, tipo, card: cm ? forma.replace(/^\S+\s+/, '') : '', rows: [], on: tipo !== 'fin' }).rows.push({ mes, data, valor: r2(valor), parc: pm ? { k: +pm[1], n: +pm[2] } : null });
+  }
+  const l = Object.values(g); l.forEach(x => x.rows.sort((a, b) => a.mes.localeCompare(b.mes)));
+  const ord = { conta: 0, repasse: 1, cartao: 2, fin: 3 };
+  return l.length ? l.sort((a, b) => ord[a.tipo] - ord[b.tipo] || a.card.localeCompare(b.card) || a.nome.localeCompare(b.nome)) : null;
+}
+// Junta meses seguidos com o mesmo valor numa conta só (com início, fim e parcelas).
+function planoRuns(x) {
+  const runs = [];
+  for (const r of x.rows) { const u = runs[runs.length - 1];
+    if (u && u.valor === r.valor && ymDiff(u.ate, r.mes) === 1 && (!r.parc || (u.parcAte && r.parc.k === u.parcAte.k + 1 && r.parc.n === u.parcAte.n))) { u.ate = r.mes; u.parcAte = r.parc; u.dias.push(+r.data.slice(8)); }
+    else runs.push({ de: r.mes, ate: r.mes, valor: r.valor, parc: r.parc, parcAte: r.parc, dias: [+r.data.slice(8)] }); }
+  const last = x.rows[x.rows.length - 1].mes;
+  return runs.map(u => { const dia = u.dias.sort((a, b) => u.dias.filter(v => v === b).length - u.dias.filter(v => v === a).length)[0];
+    return u.parc ? { valor: u.valor, dia, inicio: ymAdd(u.de, -(u.parc.k - 1)), fim: ymAdd(u.de, u.parc.n - u.parc.k), de: u.de, ate: u.ate, parc: u.parc } : { valor: u.valor, dia, inicio: u.de, fim: u.ate === last && runs[runs.length - 1] === u ? null : u.ate, de: u.de, ate: u.ate }; });
+}
+const achaCartao = (d, nome) => { const n = Parse.norm(nome); return Object.keys(d.cartoes).find(id => { const c = Parse.norm(d.cartoes[id].nome); return c.includes(n) || n.includes(c); }); };
+function renderPlano() {
+  const c = cfg(), gs = W.grupos, on = gs.filter(x => x.on), cards = [...new Set(gs.filter(x => x.tipo === 'cartao').map(x => x.card))];
+  $('#i-opts').innerHTML = `<div class="opts"><div class="f"><label for="i-pessoa">Quem é “Você” nesta planilha</label><select id="i-pessoa">${['a', 'b'].map(p => `<option value="${p}" ${W.pessoa === p ? 'selected' : ''}>${esc(c.nomes[p])}</option>`).join('')}</select></div>
+    <div class="sub" style="align-self:end">Planilha de planejamento reconhecida. ${cards.map(n => achaCartao(D, n) ? `Cartão ${esc(n)}: usa “${esc(D.cartoes[achaCartao(D, n)].nome)}”.` : `Cartão ${esc(n)}: será criado.`).join(' ')}</div></div>`;
+  const lbl = { conta: 'conta', repasse: 'conta + repasse', cartao: 'previsão no cartão', fin: 'financiamento' };
+  const rows = gs.map((x, i) => { const a = x.rows[0], z = x.rows[x.rows.length - 1], vs = [...new Set(x.rows.map(r => r.valor))];
+    return `<tr class="${x.on ? '' : 'off'}"><td><input type="checkbox" data-grp="${i}" ${x.on ? 'checked' : ''} aria-label="Incluir ${esc(x.nome)}"></td><td class="w">${esc(x.nome)}${x.tipo === 'fin' ? ' <span class="tag">cadastre em Financiamentos</span>' : ''}</td>
+      <td>${x.tipo === 'cartao' ? 'Cartão ' + esc(x.card) : lbl[x.tipo]}</td><td>${ymCurto(a.mes)}${z.mes !== a.mes ? ' → ' + ymCurto(z.mes) : ''}${a.parc ? ` <span class="tag">${a.parc.k}/${a.parc.n}${z !== a ? '…' + z.parc.k + '/' + z.parc.n : ''}</span>` : ''}</td>
+      <td>${x.tipo === 'cartao' ? 'pessoal' : x.tipo === 'repasse' ? 'repasse cobre' : x.pct === 1 ? 'pessoal' : x.pct === .5 ? 'meio a meio' : Math.round(x.pct * 100) + '% seu'}</td><td class="r">${brl(vs[0])}${vs.length > 1 ? '…' : ''}</td></tr>`; }).join('');
+  $('#i-prev').innerHTML = `<div class="tbl"><table><thead><tr><th></th><th>Item</th><th>Entra como</th><th>Período</th><th>Divisão</th><th class="r">Valor/mês</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="sub" style="margin:8px 0 0">Contas e empréstimos viram contas mensais (com parcela e fim). O que é de cartão entra como previsão nas faturas de cada mês e é substituído quando você importar a fatura real. Importar a planilha de novo atualiza o que veio dela, sem duplicar.</p>`;
+  $('#i-go').disabled = !on.length; $('#i-go').textContent = on.length ? `Importar ${on.length} ${on.length === 1 ? 'item' : 'itens'}` : 'Importar';
+  $('#i-info').textContent = `${gs.reduce((t, x) => t + x.rows.length, 0)} linhas em ${gs.length} itens`;
+}
+function commitPlano(w) {
+  mutate(d => {
+    const eu = w.pessoa, ou = outro(eu), gs = w.grupos.filter(x => x.on), ini = gs.reduce((m, x) => x.rows[0].mes < m ? x.rows[0].mes : m, '9999-12'), novas = {};
+    let nc = 0, nl = 0, nr = 0, pulou = 0;
+    // o que veio de uma importação anterior desta planilha é refeito, sem apagar o passado
+    for (const [id, l] of Object.entries(d.lanc)) if (l.plano && l.prev && l.fatura >= ini) delete d.lanc[id];
+    for (const [id, x] of Object.entries(d.extras)) if (x.plano && x.mes >= ini) delete d.extras[id];
+    const real = new Set(Object.values(d.lanc).filter(l => l.cartao && !l.prev).map(l => l.cartao + '|' + l.fatura));
+    for (const g of gs) {
+      if (g.tipo === 'cartao') {
+        let cid = achaCartao(d, g.card);
+        if (!cid) { cid = uid(); const n = Parse.norm(g.card); d.cartoes[cid] = { nome: g.card, limite: 0, dia: +g.rows[0].data.slice(8) || 10, fech: 0, tipo: 'pessoal', dono: eu, cor: n.includes('nubank') ? 'roxo' : n.includes('itau') ? 'laranja' : 'grafite' }; }
+        for (const r of g.rows) { if (real.has(cid + '|' + r.mes)) { pulou++; continue; }
+          const l = { data: r.data, desc: r.parc ? `${g.nome} · parcela ${r.parc.k}/${r.parc.n}` : g.nome, valor: -r.valor, chave: 'pl:' + g.key + '|' + r.mes, origem: 'cartao', pessoa: d.cartoes[cid].dono, cartao: cid, fatura: r.mes, prev: true, plano: true };
+          if (r.parc) { l.parc = r.parc; l.pbase = Parse.norm(g.nome) + '|' + r.valor.toFixed(2) + '|' + r.parc.n; l.pkey = l.pbase + '|' + r.parc.k;
+            for (const [id, o] of Object.entries(d.lanc)) if (o.prev && o.cartao === cid && o.pkey === l.pkey) delete d.lanc[id]; }
+          d.lanc[uid()] = l; nl++; }
+        continue;
+      }
+      const pag = g.tipo === 'repasse' || /voc/i.test(g.quem) ? eu : ou, casa = g.tipo !== 'repasse' && g.pct > 0 && g.pct < 1;
+      for (const u of planoRuns(g)) {
+        const id = 'pl' + hash(g.nome + '|' + g.forma + '|' + (u.parc ? u.inicio + '|' + u.parc.n : u.valor + '|' + (g.tipo === 'repasse' ? 'r' : pag))), old = d.contas[id];
+        d.contas[id] = { nome: g.nome.slice(0, 60), valor: u.valor, dia: u.dia, tipo: casa ? 'casa' : 'pessoal', pagador: pag, moradia: old ? !!old.moradia : false, recorrente: true, mes: null,
+          inicio: old && old.inicio && old.inicio < u.inicio && !u.parc ? old.inicio : u.inicio, fim: u.fim, div: casa ? (g.pct === .5 ? 'igual' : 'pct') : 'padrao', pctA: casa && g.pct !== .5 ? Math.round((eu === 'a' ? g.pct : 1 - g.pct) * 100) : null, plano: true };
+        novas[id] = 1; nc++;
+      }
+      if (g.tipo === 'repasse') for (const r of g.rows) { d.extras[uid()] = { nome: `Repasse · ${g.nome}`.slice(0, 60), valor: r.valor, mes: r.mes, pessoa: eu, plano: true }; nr++; }
+    }
+    // contas de uma importação anterior que saíram da planilha: encerram no mês anterior ao início desta
+    for (const [id, x] of Object.entries(d.contas)) if (x.plano && !novas[id]) { if ((x.inicio || '0000-00') < ini) { const f = ymAdd(ini, -1); if (!x.fim || x.fim > f) x.fim = f; } else delete d.contas[id]; }
+    return `Planilha importada: ${nc} contas · ${nl} previsões nas faturas${nr ? ` · ${nr} repasses` : ''}${pulou ? ` · ${pulou} puladas (fatura real já importada)` : ''}`;
+  });
+}
+
 $('#i-file').onchange = e => { const f = e.target.files[0]; if (f) readFile(f); };
 $('#dimp').addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.item) { W.items[+t.dataset.item].on = t.checked; renderImp(); return; }
   if (t.id === 'i-file') return;
-  if (t.id === 'i-pessoa') W.pessoa = t.value; else if (t.id === 'i-cartao') { W.cartao = t.value; autoFatura(); } else if (t.id === 'i-fatura') { W.fatura = t.value; W.fatFixa = true; W.fatAuto = false; } else if (t.id === 'i-proj') { W.proj = t.checked; renderImp(); return; } else if (t.dataset.map) W.map[t.dataset.map] = +t.value;
+  if (t.id === 'i-pessoa') W.pessoa = t.value; else if (t.id === 'i-cartao') { W.cartao = t.value; autoFatura(); } else if (t.id === 'i-fatura') { W.fatura = t.value; W.fatFixa = true; W.fatAuto = false; } else if (t.id === 'i-proj') { W.proj = t.checked; renderImp(); return; } else if (t.id === 'i-subst') { W.subst = t.checked; return; } else if (t.dataset.grp) { W.grupos[+t.dataset.grp].on = t.checked; renderImp(); return; } else if (t.dataset.map) W.map[t.dataset.map] = +t.value;
   if (t.id !== 'i-fatura' && t.id !== 'i-cartao') buildItems(); renderImp();
 });
 $('#i-dest').onclick = e => { const b = e.target.closest('[data-dest]'); if (!b) return; W.dest = b.dataset.dest; buildItems(); autoFatura(); renderImp(); };
 $('#i-go').onclick = () => {
+  if (W.kind === 'plano') { const w = W; $('#dimp').close(); return commitPlano(w); }
   const w = W, items = w.items.filter(x => x.on); $('#dimp').close();
   mutate(d => {
     if (w.dest === 'contas') { for (const x of items) d.contas[uid()] = { nome: x.desc, valor: x.valor, dia: x.dia, tipo: 'casa', pagador: x.pagador, moradia: false, recorrente: true, mes: null }; return `${items.length} contas importadas. Confira em Nossa casa.`; }
     const card = d.cartoes[w.cartao]; if (w.dest === 'cartao' && !card) return 'O cartão não existe mais. Nada foi importado.';
+    if (w.dest === 'cartao' && w.subst && items.length) for (const [id, o] of Object.entries(d.lanc)) if (o.prev && o.cartao === w.cartao && o.fatura === w.fatura) delete d.lanc[id];
     const pre = w.dest === 'cartao' ? 'k:' + w.cartao + ':' : 'c:' + w.pessoa + ':', have = new Set(Object.values(d.lanc).map(l => l.chave)), seen = {}, novos = []; let dup = 0;
     for (const x of items) {
       const base = pre + (x.fitid ? 'f:' + x.fitid : x.data + '|' + x.valor + '|' + x.desc); seen[base] = (seen[base] || 0) + 1; const chave = base + '#' + seen[base];

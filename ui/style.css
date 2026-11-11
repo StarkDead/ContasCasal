@@ -210,3 +210,5 @@ td.good{color:var(--ok);font-weight:600}
 .banner.upd{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);color:var(--fg)}
 .banner.upd span{flex:1;min-width:180px}
 dialog.mid{width:min(560px,calc(100vw - 32px))}
+dialog.wide .tbl td.w{min-width:120px}
+dialog.wide .tbl th,dialog.wide .tbl td{padding:7px 8px}

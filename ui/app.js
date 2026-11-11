@@ -22,7 +22,7 @@ const dm = iso => iso.slice(8) + '/' + iso.slice(5, 7);
 // Fora do programa instalado (aberto direto no navegador), guarda no próprio navegador.
 const store = window.api || (() => { const K = 'casa-em-dia'; return { status: async () => ({ path: 'navegador' }), pick: async () => ({ path: 'navegador' }), load: async () => ({ path: 'navegador', json: ls.get(K) }), save: async j => ls.set(K, j), reveal: async () => { }, onChanged() { } }; })();
 
-const vazio = () => ({ v: 1, config: null, contas: {}, cartoes: {}, lanc: {}, fatManual: {}, meses: {}, reservas: {}, financ: {}, extras: {} });
+const vazio = () => ({ v: 1, config: null, contas: {}, cartoes: {}, lanc: {}, fatManual: {}, meses: {}, reservas: {}, financ: {}, extras: {}, assin: {} });
 const norm = d => ({ ...vazio(), ...(d && typeof d === 'object' && !Array.isArray(d) ? d : {}) });
 let D = vazio();
 
@@ -31,6 +31,25 @@ const S = { ym: now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2,
 const DEF = { nomes: { a: 'Pessoa 1', b: 'Pessoa 2' }, salarios: { a: 0, b: 0 }, diaadia: { a: 0, b: 0 }, divisao: 'proporcional', pctA: 50 };
 const cfg = () => { const c = D.config || {}; return { ...DEF, ...c, nomes: { ...DEF.nomes, ...c.nomes }, salarios: { ...DEF.salarios, ...c.salarios }, diaadia: { ...DEF.diaadia, ...c.diaadia } }; };
 const outro = k => k === 'a' ? 'b' : 'a';
+
+/* ---------- assinaturas ---------- */
+const ASSIN = /netflix|spotify|amazon ?prime|prime video|disney|hbo|\bmax\b|globoplay|google one|google storage|youtube|apple ?(tv|music|one|com bill)|icloud|claude|anthropic|chatgpt|openai|ifood club|deezer|paramount|crunchyroll|microsoft ?365|office 365|adobe|canva|dropbox|notion|linkedin|kindle|audible|playstation|xbox|nintendo|uber one|meli\+|mercado livre\+|telecine|premiere|star\+|duolingo|wellhub|gympass|totalpass|smart ?fit/;
+const assinKey = desc => Parse.norm(desc).replace(/\s*·\s*parcela.*$/, '').replace(/[^a-z0-9+ ]/g, ' ').replace(/\s+/g, ' ').trim();
+const ehAssin = l => { if (l.parc) return false; const k = assinKey(l.desc), o = D.assin[k]; return o != null ? !!o : ASSIN.test(k); };
+function assinaturas(ym) {
+  const g = {};
+  for (const l of Object.values(D.lanc)) { if (!l.cartao || l.fatura !== ym || l.valor >= 0 || !ehAssin(l)) continue; const k = assinKey(l.desc) + '|' + l.cartao;
+    (g[k] = g[k] || { nome: l.desc, desc: l.desc, cartao: l.cartao, valor: 0, prev: true }).valor = r2(g[k].valor - l.valor); if (!l.prev) g[k].prev = false; }
+  return Object.values(g).sort((a, b) => b.valor - a.valor);
+}
+function vAssin() {
+  const l = assinaturas(S.ym), tot = sum(l), c = cfg(), ant = sum(assinaturas(ymAdd(S.ym, -1)));
+  return `<section class="card"><h2>Assinaturas <small>· cobradas nos cartões em ${ymNome(S.ym)}</small></h2>
+    <div class="stats" style="margin-top:14px"><div><div class="sub">Total do mês</div>${big(tot, 'lg')}</div><div><div class="sub">Por ano, nesse ritmo</div>${big(r2(tot * 12), 'md')}</div><div><div class="sub">Quantas</div><div class="big md">${l.length}</div>${ant ? `<div class="sub">mês anterior: ${brl(ant)}</div>` : ''}</div></div></section>
+  <section class="card"><h2>Lista</h2><div class="rows" style="margin-top:6px">${l.length ? l.map(x => `<div class="row"><span class="nm">${esc(x.nome)}</span>${x.prev ? '<span class="tag">prevista</span>' : '<span class="tag ok">na fatura</span>'}<span class="tag">${esc((D.cartoes[x.cartao] || {}).nome || 'cartão')}</span><span class="tag">${esc(c.nomes[(D.cartoes[x.cartao] || {}).dono || 'a'])}</span><span class="num">${brl(x.valor)}</span><button class="x" data-assin="${esc(x.desc)}" title="Não é assinatura" aria-label="Tirar ${esc(x.nome)} das assinaturas">×</button></div>`).join('')
+    : `<div class="empty">Nenhuma assinatura nas faturas de ${ymNome(S.ym)}.</div>`}</div>
+    <p class="sub" style="margin:12px 0 0">O app reconhece as mais comuns pelo nome (Netflix, Spotify, Claude…) e as marcadas como “Assinatura” na planilha. Para incluir outra, vá em Cartões e clique em “+ assinatura” ao lado do lançamento.</p></section>`;
+}
 
 /* ---------- cálculo ---------- */
 function faturaTotal(cid, ym) {
@@ -147,6 +166,9 @@ function vVisao() {
       <div class="sec">O que entra na conta</div>
       <div class="rows">${mor.length ? mor.map(x => `<div class="row"><span class="nm">${esc(x.nome)}</span><span class="num">${brl(casal ? x.valor : k.parte(x, eu))}</span></div>`).join('') : `<div class="empty">Marque “Conta de moradia” nas contas que entram aqui (aluguel, condomínio, luz…).</div>`}</div>
     </section>
+    ${(() => { const as = assinaturas(S.ym); return as.length ? `<section class="card"><div class="hd"><h2>Assinaturas</h2><button class="btn sm ghost" data-go="assin">Ver todas</button></div>
+      <div class="sub" style="margin-top:14px">Cobradas nos cartões em ${ymNome(S.ym)}</div>${big(sum(as), 'lg')}<div class="sub" style="margin-top:6px">${as.length} ${as.length === 1 ? 'assinatura' : 'assinaturas'} · ${brl(r2(sum(as) * 12))} por ano</div>
+      <div class="rows" style="margin-top:8px">${as.slice(0, 6).map(x => `<div class="row"><span class="nm">${esc(x.nome)}</span><span class="num">${brl(x.valor)}</span></div>`).join('')}${as.length > 6 ? `<div class="row"><span class="nm sub">e mais ${as.length - 6}</span><span class="num">${brl(sum(as.slice(6)))}</span></div>` : ''}</div></section>` : ''; })()}
   </div></div>`;
 }
 
@@ -210,7 +232,7 @@ function vCartoes() {
         <div style="margin:10px 0">${big(tot, 'lg')}</div>
         <div class="inline"><label class="sub" for="fm-${esc(id)}">Valor digitado:</label><input type="text" inputmode="decimal" id="fm-${esc(id)}" placeholder="0,00" value="${manual != null ? money(manual) || '0' : ''}"><button class="btn sm ghost" data-fman="${esc(id)}">Usar este valor</button>${manual != null ? `<button class="btn sm ghost" data-fauto="${esc(id)}">Voltar à soma importada</button>` : ''}</div>
         <div class="sec">Lançamentos da fatura <span class="sub">· ${l.length}${l.some(v => v.prev) ? ' · “prevista” = parcela projetada de uma fatura anterior' : ''}</span></div>
-        <div class="rows">${l.length ? l.map(v => `<div class="row"><span class="dt">${dm(v.data)}</span><span class="nm">${esc(v.desc)}</span>${v.prev ? '<span class="tag">prevista</span>' : ''}<span class="num ${v.valor > 0 ? 'pos' : ''}">${brl(-v.valor)}</span>${delBtn(v.id)}</div>`).join('') : `<div class="empty">Nada importado nesta fatura. Use “Importar arquivo” e escolha “Fatura do cartão”.</div>`}</div>
+        <div class="rows">${l.length ? l.map(v => `<div class="row"><span class="dt">${dm(v.data)}</span><span class="nm">${esc(v.desc)}</span>${v.prev ? '<span class="tag">prevista</span>' : ''}${v.valor < 0 && !v.parc ? `<button class="tag tbtn ${ehAssin(v) ? 'ok' : ''}" data-assin="${esc(v.desc)}">${ehAssin(v) ? 'assinatura ×' : '+ assinatura'}</button>` : ''}<span class="num ${v.valor > 0 ? 'pos' : ''}">${brl(-v.valor)}</span>${delBtn(v.id)}</div>`).join('') : `<div class="empty">Nada importado nesta fatura. Use “Importar arquivo” e escolha “Fatura do cartão”.</div>`}</div>
       </div></div></section>`; }).join('');
 }
 
@@ -359,7 +381,7 @@ function render(force) {
   const t = document.documentElement.dataset.theme; document.querySelectorAll('#tema button').forEach(b => b.classList.toggle('on', b.dataset.tema === t));
   const v = $('#view'), usable = S.ready && S.path && !S.loadErr; $('#add').disabled = $('#imp').disabled = !usable;
   if (!force && S.view === 'renda' && v.contains(document.activeElement) && document.activeElement.matches('input,select')) return;
-  const views = { reserva: vReserva, financ: vFinanc, visao: vVisao, fluxo: vFluxo, cartoes: vCartoes, casa: vCasa, renda: vRenda, dados: vDados };
+  const views = { assin: vAssin, reserva: vReserva, financ: vFinanc, visao: vVisao, fluxo: vFluxo, cartoes: vCartoes, casa: vCasa, renda: vRenda, dados: vDados };
   const upd = S.update ? `<div class="banner upd"><span>Uma versão nova do Casa em Dia foi baixada.</span><button class="btn sm" data-act="atualizar">Reiniciar e atualizar</button></div>` : '';
   v.innerHTML = upd + (!S.ready ? `<div class="card empty">Abrindo…</div>` : !S.path ? vBoasVindas()
     : S.loadErr ? `<div class="banner">${S.loadErr === 'missing' ? 'Não encontrei o arquivo de dados. Ele pode ter sido movido ou a pasta sincronizada ainda não baixou.' : 'Não consegui ler o arquivo de dados. Ele pode estar no meio de uma sincronização; nada foi alterado.'}</div>${vDados()}<div><button class="btn" data-act="recarregar">Tentar de novo</button></div>`
@@ -622,6 +644,7 @@ function commitPlano(w) {
           const l = { data: r.data, desc: r.parc ? `${g.nome} · parcela ${r.parc.k}/${r.parc.n}` : g.nome, valor: -r.valor, chave: 'pl:' + g.key + '|' + r.mes, origem: 'cartao', pessoa: d.cartoes[cid].dono, cartao: cid, fatura: r.mes, prev: true, plano: true };
           if (r.parc) { l.parc = r.parc; l.pbase = Parse.norm(g.nome) + '|' + r.valor.toFixed(2) + '|' + r.parc.n; l.pkey = l.pbase + '|' + r.parc.k;
             for (const [id, o] of Object.entries(d.lanc)) if (o.prev && o.cartao === cid && o.pkey === l.pkey) delete d.lanc[id]; }
+          if (/assinatura/i.test(g.cat)) d.assin[assinKey(g.nome)] = true;
           d.lanc[uid()] = l; nl++; }
         continue;
       }
@@ -707,7 +730,7 @@ document.addEventListener('change', e => {
 async function pick(mode) { const r = await store.pick(mode); if (r.canceled) return; await load(); S.ready = true; render(true); }
 document.addEventListener('click', e => {
   if (e.target.closest('[data-close]')) { e.target.closest('dialog').close(); return; }
-  const t = e.target.closest('[data-eu],[data-pagar],[data-edit],[data-dia],[data-mor],[data-act],[data-go],[data-tema],[data-fluxo],[data-del],[data-kedit],[data-fman],[data-fauto],[data-wipe],[data-delconta],[data-redit],[data-fedit],[data-aporte],[data-amadd],[data-amdel],[data-amfeita],[data-delextra],[data-okfat]'); if (!t) return; const d = t.dataset;
+  const t = e.target.closest('[data-eu],[data-pagar],[data-edit],[data-dia],[data-mor],[data-act],[data-go],[data-tema],[data-fluxo],[data-del],[data-kedit],[data-fman],[data-fauto],[data-wipe],[data-delconta],[data-redit],[data-fedit],[data-aporte],[data-amadd],[data-amdel],[data-amfeita],[data-delextra],[data-okfat],[data-assin]'); if (!t) return; const d = t.dataset;
   if (d.eu) { S.eu = d.eu; ls.set('eu', S.eu); render(true); }
   else if (d.tema) { const cur = document.documentElement.dataset.theme; if (cur === d.tema) { delete document.documentElement.dataset.theme; ls.set('tema', ''); } else { document.documentElement.dataset.theme = d.tema; ls.set('tema', d.tema); } render(); }
   else if (d.pagar) { const id = d.pagar, ym = S.ym; mutate(x => { const m = mesDe(x, ym); if (m.pagas[id]) delete m.pagas[id]; else m.pagas[id] = true; }); }
@@ -740,6 +763,7 @@ document.addEventListener('click', e => {
     if (!nome || !(valor > 0) || !/^\d{4}-\d{2}$/.test(mes)) { toast('Informe descrição, valor maior que zero e o mês.'); return; }
     if (document.activeElement) document.activeElement.blur();
     mutate(x => { x.extras[uid()] = { nome, valor, mes, pessoa }; }, `Recebimento de ${brl(valor)} lançado em ${ymCurto(mes)}`); }
+  else if (d.assin) { const k = assinKey(d.assin), on = !ehAssin({ desc: d.assin }); mutate(x => { x.assin[k] = on; }, on ? 'Marcada como assinatura' : 'Tirada das assinaturas'); }
   else if (d.act === 'reparo') mutate(x => aplicaReparo(x));
   else if (d.okfat) { const [cid, fat] = d.okfat.split('|'); mutate(x => { const c = x.cartoes[cid]; if (c) (c.confere = c.confere || {})[fat] = true; }, 'Fatura mantida nesse mês'); }
   else if (d.act === 'check-upd') { if (store.checkUpdate) store.checkUpdate().then(r => { S.upd = r; render(); }); }
@@ -768,7 +792,7 @@ $('#add').onclick = () => openConta();
 $('#imp').onclick = () => openImp(S.view === 'cartoes' ? 'cartao' : S.view === 'casa' ? 'contas' : 'extrato');
 $('#prev').onclick = () => { S.ym = ymAdd(S.ym, -1); S.dia = null; S.confirm = null; render(true); };
 $('#next').onclick = () => { S.ym = ymAdd(S.ym, 1); S.dia = null; S.confirm = null; render(true); };
-function route() { const h = location.hash.slice(1); S.view = ['visao', 'fluxo', 'cartoes', 'casa', 'reserva', 'financ', 'renda', 'dados'].includes(h) ? h : 'visao'; S.confirm = null; render(true); }
+function route() { const h = location.hash.slice(1); S.view = ['visao', 'fluxo', 'cartoes', 'casa', 'assin', 'reserva', 'financ', 'renda', 'dados'].includes(h) ? h : 'visao'; S.confirm = null; render(true); }
 addEventListener('hashchange', route);
 
 const tema = ls.get('tema'); if (tema === 'light' || tema === 'dark') document.documentElement.dataset.theme = tema;

@@ -171,8 +171,8 @@ function vCartoes() {
       <div><div class="hd"><h2>Fatura de ${ymNome(S.ym)} <small>· ${x.tipo === 'casa' ? 'dividida entre os dois' : 'pessoal de ' + esc(c.nomes[x.dono])}</small></h2></div>
         <div style="margin:10px 0">${big(tot, 'lg')}</div>
         <div class="inline"><label class="sub" for="fm-${esc(id)}">Valor digitado:</label><input type="text" inputmode="decimal" id="fm-${esc(id)}" placeholder="0,00" value="${manual != null ? money(manual) || '0' : ''}"><button class="btn sm ghost" data-fman="${esc(id)}">Usar este valor</button>${manual != null ? `<button class="btn sm ghost" data-fauto="${esc(id)}">Voltar à soma importada</button>` : ''}</div>
-        <div class="sec">Lançamentos importados <span class="sub">· ${l.length}</span></div>
-        <div class="rows">${l.length ? l.map(v => `<div class="row"><span class="dt">${dm(v.data)}</span><span class="nm">${esc(v.desc)}</span><span class="num ${v.valor > 0 ? 'pos' : ''}">${brl(-v.valor)}</span>${delBtn(v.id)}</div>`).join('') : `<div class="empty">Nada importado nesta fatura. Use “Importar arquivo” e escolha “Fatura do cartão”.</div>`}</div>
+        <div class="sec">Lançamentos da fatura <span class="sub">· ${l.length}${l.some(v => v.prev) ? ' · “prevista” = parcela projetada de uma fatura anterior' : ''}</span></div>
+        <div class="rows">${l.length ? l.map(v => `<div class="row"><span class="dt">${dm(v.data)}</span><span class="nm">${esc(v.desc)}</span>${v.prev ? '<span class="tag">prevista</span>' : ''}<span class="num ${v.valor > 0 ? 'pos' : ''}">${brl(-v.valor)}</span>${delBtn(v.id)}</div>`).join('') : `<div class="empty">Nada importado nesta fatura. Use “Importar arquivo” e escolha “Fatura do cartão”.</div>`}</div>
       </div></div></section>`; }).join('');
 }
 
@@ -439,9 +439,10 @@ $('#ffin').onsubmit = e => {
 };
 
 /* ---------- importação ---------- */
+const pkey = x => Parse.norm(x.parc.base) + '|' + Math.abs(x.valor).toFixed(2) + '|' + x.parc.n;
 let W = null;
 function openImp(dest) {
-  W = { dest: dest || 'extrato', kind: null, name: '', ofx: [], t: null, map: {}, pessoa: S.eu, cartao: Object.keys(D.cartoes)[0] || '', fatura: S.ym, items: [], skipped: 0 };
+  W = { dest: dest || 'extrato', kind: null, name: '', ofx: [], t: null, map: {}, pessoa: S.eu, cartao: Object.keys(D.cartoes)[0] || '', fatura: S.ym, items: [], skipped: 0, proj: true };
   $('#i-file').value = ''; $('#i-err').hidden = true; renderImp(); $('#dimp').showModal();
 }
 function impErr(t) { const e = $('#i-err'); e.textContent = t || ''; e.hidden = !t; }
@@ -481,7 +482,7 @@ function buildItems() {
   }
   // Fatura: bancos exportam compra ora positiva, ora negativa. Guardamos gasto como negativo.
   if (W.dest === 'cartao' && raw.filter(x => x.valor > 0).length > raw.length / 2) raw.forEach(x => x.valor = -x.valor);
-  W.items = raw.map(x => ({ ...x, on: !(W.dest === 'cartao' && x.valor > 0 && /pagamento/i.test(x.desc)) }));
+  W.items = raw.map(x => ({ ...x, on: !(W.dest === 'cartao' && x.valor > 0 && /pagamento/i.test(x.desc)), parc: W.dest === 'cartao' && x.valor < 0 ? Parse.parcela(x.desc) : null }));
 }
 function renderImp() {
   const c = cfg(), cards = Object.entries(D.cartoes);
@@ -490,15 +491,16 @@ function renderImp() {
   const col = (k, lbl, opt) => `<div class="f"><label for="m-${k}">${lbl}</label><select id="m-${k}" data-map="${k}">${opt ? '<option value="-1">(não tem)</option>' : ''}${W.t.header.map((h, i) => `<option value="${i}" ${W.map[k] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>`;
   let o = '';
   if (W.dest === 'extrato') o += pes('De quem é a conta bancária');
-  if (W.dest === 'cartao') o += cards.length ? `<div class="f"><label for="i-cartao">Cartão</label><select id="i-cartao">${cards.map(([id, x]) => `<option value="${esc(id)}" ${W.cartao === id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></div><div class="f"><label for="i-fatura">Fatura de</label><input type="month" id="i-fatura" value="${esc(W.fatura)}"></div>` : `<div class="err">Cadastre o cartão primeiro, na tela Cartões.</div>`;
+  if (W.dest === 'cartao') o += cards.length ? `<div class="f"><label for="i-cartao">Cartão</label><select id="i-cartao">${cards.map(([id, x]) => `<option value="${esc(id)}" ${W.cartao === id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></div><div class="f"><label for="i-fatura">Fatura de</label><input type="month" id="i-fatura" value="${esc(W.fatura)}"></div><label class="ck"><input type="checkbox" id="i-proj" ${W.proj ? 'checked' : ''}> Lançar as parcelas que faltam nas próximas faturas</label>` : `<div class="err">Cadastre o cartão primeiro, na tela Cartões.</div>`;
   if (W.dest === 'contas') o += pes('Quem paga (quando a planilha não diz)');
   if (W.kind === 'table') o += W.dest === 'contas' ? col('desc', 'Coluna do nome') + col('valor', 'Coluna do valor') + col('dia', 'Coluna do vencimento', 1) + col('quem', 'Coluna de quem paga', 1) : col('data', 'Coluna da data') + col('desc', 'Coluna da descrição') + col('valor', 'Coluna do valor');
   $('#i-opts').innerHTML = `<div class="opts">${o}</div>`;
   const n = W.items.filter(x => x.on).length, okCard = W.dest !== 'cartao' || (cards.length && /^\d{4}-\d{2}$/.test(W.fatura));
   $('#i-go').disabled = !n || !okCard; $('#i-go').textContent = n ? `Importar ${n} ${n === 1 ? 'item' : 'itens'}` : 'Importar';
-  $('#i-info').textContent = W.kind ? `${W.items.length} linhas lidas${W.skipped ? ` · ${W.skipped} ignoradas (sem data ou valor)` : ''}` : '';
+  const pcs = W.dest === 'cartao' ? W.items.filter(x => x.on && x.parc) : [], fut = pcs.reduce((t, x) => t + x.parc.n - x.parc.k, 0);
+  $('#i-info').textContent = W.kind ? `${W.items.length} linhas lidas${W.skipped ? ` · ${W.skipped} ignoradas (sem data ou valor)` : ''}${pcs.length ? ` · ${pcs.length} parceladas${W.proj && fut ? `, ${fut} parcelas futuras serão lançadas` : ''}` : ''}` : '';
   if (!W.kind) { $('#i-prev').innerHTML = `<p class="sub" style="margin:0">${W.dest === 'contas' ? 'Use a planilha em que vocês já anotam as contas: uma linha por conta, com nome e valor. Elas entram como contas da casa que se repetem todo mês; depois dá para ajustar cada uma.' : W.dest === 'cartao' ? 'Baixe a fatura no site ou app do banco em CSV ou OFX. Linhas de “pagamento recebido” vêm desmarcadas para não zerar a fatura.' : 'Baixe o extrato no site do banco em OFX (melhor) ou CSV. Lançamentos repetidos de uma importação anterior são ignorados.'}</p>`; return; }
-  const rows = W.items.slice(0, 300).map((x, i) => `<tr class="${x.on ? '' : 'off'}"><td><input type="checkbox" data-item="${i}" ${x.on ? 'checked' : ''} aria-label="Incluir ${esc(x.desc)}"></td>${W.dest === 'contas' ? `<td class="w">${esc(x.desc)}</td><td>${x.dia || '—'}</td><td>${esc(c.nomes[x.pagador])}</td><td class="r">${brl(x.valor)}</td>` : `<td>${x.data.slice(8)}/${x.data.slice(5, 7)}/${x.data.slice(0, 4)}</td><td class="w">${esc(x.desc)}</td><td class="r">${brl(W.dest === 'cartao' ? -x.valor : x.valor)}</td>`}</tr>`).join('');
+  const rows = W.items.slice(0, 300).map((x, i) => `<tr class="${x.on ? '' : 'off'}"><td><input type="checkbox" data-item="${i}" ${x.on ? 'checked' : ''} aria-label="Incluir ${esc(x.desc)}"></td>${W.dest === 'contas' ? `<td class="w">${esc(x.desc)}</td><td>${x.dia || '—'}</td><td>${esc(c.nomes[x.pagador])}</td><td class="r">${brl(x.valor)}</td>` : `<td>${x.data.slice(8)}/${x.data.slice(5, 7)}/${x.data.slice(0, 4)}</td><td class="w">${esc(x.desc)}${x.parc ? ` <span class="tag">parcela ${x.parc.k} de ${x.parc.n}</span>` : ''}</td><td class="r">${brl(W.dest === 'cartao' ? -x.valor : x.valor)}</td>`}</tr>`).join('');
   $('#i-prev').innerHTML = `<div class="tbl"><table><thead><tr><th></th>${W.dest === 'contas' ? '<th>Conta</th><th>Dia</th><th>Quem paga</th><th class="r">Valor</th>' : `<th>Data</th><th>Descrição</th><th class="r">${W.dest === 'cartao' ? 'Compra' : 'Valor'}</th>`}</tr></thead><tbody>${rows}</tbody></table></div>${W.items.length > 300 ? `<p class="sub">Mostrando as 300 primeiras de ${W.items.length} linhas; todas as marcadas serão importadas.</p>` : ''}`;
 }
 $('#i-file').onchange = e => { const f = e.target.files[0]; if (f) readFile(f); };
@@ -506,7 +508,7 @@ $('#dimp').addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.item) { W.items[+t.dataset.item].on = t.checked; renderImp(); return; }
   if (t.id === 'i-file') return;
-  if (t.id === 'i-pessoa') W.pessoa = t.value; else if (t.id === 'i-cartao') W.cartao = t.value; else if (t.id === 'i-fatura') W.fatura = t.value; else if (t.dataset.map) W.map[t.dataset.map] = +t.value;
+  if (t.id === 'i-pessoa') W.pessoa = t.value; else if (t.id === 'i-cartao') W.cartao = t.value; else if (t.id === 'i-fatura') W.fatura = t.value; else if (t.id === 'i-proj') { W.proj = t.checked; renderImp(); return; } else if (t.dataset.map) W.map[t.dataset.map] = +t.value;
   if (t.id !== 'i-fatura' && t.id !== 'i-cartao') buildItems(); renderImp();
 });
 $('#i-dest').onclick = e => { const b = e.target.closest('[data-dest]'); if (!b) return; W.dest = b.dataset.dest; buildItems(); renderImp(); };
@@ -520,9 +522,17 @@ $('#i-go').onclick = () => {
       const base = pre + (x.fitid ? 'f:' + x.fitid : x.data + '|' + x.valor + '|' + x.desc); seen[base] = (seen[base] || 0) + 1; const chave = base + '#' + seen[base];
       if (have.has(chave)) { dup++; continue; }
       const l = { data: x.data, desc: x.desc, valor: x.valor, chave, origem: w.dest === 'cartao' ? 'cartao' : 'conta', pessoa: w.dest === 'cartao' ? card.dono : w.pessoa };
-      if (w.dest === 'cartao') { l.cartao = w.cartao; l.fatura = w.fatura; }
+      if (w.dest === 'cartao') { l.cartao = w.cartao; l.fatura = w.fatura;
+        if (x.parc) { l.parc = { k: x.parc.k, n: x.parc.n }; l.pbase = pkey(x); l.pkey = l.pbase + '|' + x.parc.k;
+          // a parcela real substitui a que tinha sido prevista por uma fatura anterior
+          for (const [id, o] of Object.entries(d.lanc)) if (o.prev && o.cartao === w.cartao && o.pkey === l.pkey) delete d.lanc[id]; } }
       d.lanc[uid()] = l; novos.push(l);
     }
+    let prev = 0;
+    if (w.dest === 'cartao' && w.proj) { const tem = new Set(Object.values(d.lanc).filter(o => o.cartao === w.cartao && o.pkey).map(o => o.pkey));
+      for (const l of novos) { if (!l.parc) continue; const base = Parse.parcela(l.desc).base;
+        for (let k = l.parc.k + 1; k <= l.parc.n; k++) { const key = l.pbase + '|' + k; if (tem.has(key)) continue; tem.add(key);
+          d.lanc[uid()] = { data: l.data, desc: `${base} · parcela ${k}/${l.parc.n}`, valor: l.valor, chave: 'p:' + key, origem: 'cartao', pessoa: l.pessoa, cartao: w.cartao, fatura: ymAdd(w.fatura, k - l.parc.k), parc: { k, n: l.parc.n }, pbase: l.pbase, pkey: key, prev: true }; prev++; } } }
     // Extrato: débito com valor idêntico ao de uma única conta em aberto do mês marca a conta como paga.
     let pagas = 0;
     if (w.dest === 'extrato') for (const l of novos) {
@@ -530,7 +540,7 @@ $('#i-go').onclick = () => {
       const cand = bills(ym).filter(b => !mes.pagas[b.id] && Math.abs(b.valor + l.valor) < .005);
       if (cand.length === 1) { l.conta = cand[0].id; mes.pagas[cand[0].id] = true; pagas++; }
     }
-    return `${novos.length} lançamentos importados` + (dup ? ` · ${dup} já existiam` : '') + (pagas ? ` · ${pagas} ${pagas === 1 ? 'conta marcada' : 'contas marcadas'} como paga` : '');
+    return `${novos.length} lançamentos importados` + (prev ? ` · ${prev} parcelas futuras lançadas nas próximas faturas` : '') + (dup ? ` · ${dup} já existiam` : '') + (pagas ? ` · ${pagas} ${pagas === 1 ? 'conta marcada' : 'contas marcadas'} como paga` : '');
   });
 };
 

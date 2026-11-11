@@ -98,6 +98,17 @@ const Parse = (() => {
     return { data, desc, valor, dia, quem };
   }
 
-  return { decode, num, date, csv, ofx, table, guess, norm };
+  // Compra parcelada na descrição da fatura: "Parcela 2/10", "PARC 02 DE 10", "LOJA 03/12".
+  function parcela(desc) {
+    const d = String(desc || '');
+    const m = d.match(/[-–(\s]*parc(?:ela)?s?\.?\s*(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})\)?/i) || d.match(/[-–(\s]*\b(\d{1,2})\s+de\s+(\d{1,2})\b\)?/i) || d.match(/[-–(\s]+(\d{1,2})\s*\/\s*(\d{1,2})\)?\s*$/);
+    if (!m) return null;
+    const k = +m[1], n = +m[2];
+    if (!(n >= 2 && n <= 72 && k >= 1 && k <= n)) return null;
+    const base = (d.slice(0, m.index) + ' ' + d.slice(m.index + m[0].length)).replace(/\s+/g, ' ').replace(/[\s\-–]+$/, '').trim();
+    return { k, n, base: base || d };
+  }
+
+  return { decode, num, date, csv, ofx, table, guess, norm, parcela };
 })();
 if (typeof module !== 'undefined') module.exports = Parse;

@@ -86,7 +86,8 @@ function vVisao() {
   const base = casal ? (+c.salarios.a || 0) + (+c.salarios.b || 0) : sal0, morV = casal ? morT : r2(mor.reduce((t, x) => t + k.parte(x, eu), 0)), mp = base > 0 ? morV / base : 0;
   const cards = Object.entries(D.cartoes), prox = [0, 1, 2].map(n => { const ym = ymAdd(S.ym, n); return { ym, v: r2(cards.reduce((s, [id]) => s + faturaTotal(id, ym), 0)) }; }), mx = Math.max(1, ...prox.map(x => x.v));
 
-  return `${D.config ? '' : `<div class="banner">Comece em <b>Nossa renda</b>: coloque os nomes e os salários de vocês. Depois adicione as contas ou importe uma planilha.</div>`}
+  const rp = reparo(D), avisoRp = rp.mover.length || rp.parc ? `<div class="banner upd"><span>Há faturas importadas para conferir: ${rp.mover.length ? rp.mover.length + ' no mês errado' : ''}${rp.mover.length && rp.parc ? ' e ' : ''}${rp.parc ? rp.parc + ' parcelas futuras por lançar' : ''}.</span><button class="btn sm" data-go="cartoes">Ver em Cartões</button></div>` : '';
+  return `${avisoRp}${D.config ? '' : `<div class="banner">Comece em <b>Nossa renda</b>: coloque os nomes e os salários de vocês. Depois adicione as contas ou importe uma planilha.</div>`}
   <div class="grid"><div class="col">
     <section class="card">
       <h2>Saldo previsto <small>· ${esc(c.nomes[eu])}</small></h2>
@@ -164,10 +165,45 @@ function vFluxo() {
 }
 const delBtn = id => S.confirm === 'del:' + id ? `<button class="btn sm danger" data-del="${esc(id)}">Excluir?</button>` : `<button class="x" data-del="${esc(id)}" aria-label="Excluir lançamento">×</button>`;
 
+// Faturas importadas por versões antigas: confere o mês de vencimento pelas datas e as parcelas que faltam lançar.
+function reparo(d) {
+  const out = { mover: [], parc: 0, lancs: [] };
+  for (const [cid, card] of Object.entries(d.cartoes)) {
+    const reais = Object.entries(d.lanc).filter(([, l]) => l.cartao === cid && !l.prev && l.fatura), porFat = {};
+    for (const [id, l] of reais) (porFat[l.fatura] = porFat[l.fatura] || []).push({ id, l, on: true, valor: l.valor, data: l.data, parc: l.parc || (l.valor < 0 ? Parse.parcela(l.desc) : null) });
+    const tem = new Set(Object.values(d.lanc).filter(o => o.cartao === cid && o.pkey).map(o => o.pkey));
+    for (const [fat, its] of Object.entries(porFat)) {
+      const v = vencFatura(card, its), ok = (card.confere || {})[fat], alvo = v && v !== fat && !ok ? v : fat;
+      if (alvo !== fat) out.mover.push({ cid, nome: card.nome, de: fat, para: alvo, n: its.length, ult: its.map(x => x.data).sort().pop() });
+      for (const x of its) { if (!x.parc) continue; const base = Parse.norm(x.parc.base || Parse.parcela(x.l.desc).base) + '|' + Math.abs(x.valor).toFixed(2) + '|' + x.parc.n; let falta = 0;
+        for (let k = x.parc.k + 1; k <= x.parc.n; k++) if (!tem.has(base + '|' + k)) falta++;
+        if (falta || !x.l.pkey) { out.parc += falta; out.lancs.push({ id: x.id, cid, base, parc: { k: x.parc.k, n: x.parc.n }, alvo, nome: (Parse.parcela(x.l.desc) || {}).base || x.l.desc }); } }
+    }
+  }
+  return out;
+}
+function aplicaReparo(d) {
+  const r = reparo(d); let n = 0;
+  for (const m of r.mover) { for (const l of Object.values(d.lanc)) if (l.cartao === m.cid && !l.prev && l.fatura === m.de) l.fatura = m.para; const c = d.cartoes[m.cid]; (c.confere = c.confere || {})[m.para] = true;
+    const a = mesDe(d, m.de), b = mesDe(d, m.para); if (a.pagas['fat-' + m.cid]) { delete a.pagas['fat-' + m.cid]; } }
+  for (const x of r.lancs) { const l = d.lanc[x.id]; if (!l) continue; l.parc = x.parc; l.pbase = x.base; l.pkey = x.base + '|' + x.parc.k;
+    const tem = new Set(Object.values(d.lanc).filter(o => o.cartao === x.cid && o.pkey).map(o => o.pkey));
+    for (let k = x.parc.k + 1; k <= x.parc.n; k++) { const key = x.base + '|' + k; if (tem.has(key)) continue;
+      d.lanc[uid()] = { data: l.data, desc: `${x.nome} · parcela ${k}/${x.parc.n}`, valor: l.valor, chave: 'p:' + key, origem: 'cartao', pessoa: l.pessoa, cartao: x.cid, fatura: ymAdd(l.fatura, k - x.parc.k), parc: { k, n: x.parc.n }, pbase: x.base, pkey: key, prev: true }; n++; } }
+  return `Faturas corrigidas: ${r.mover.length} ${r.mover.length === 1 ? 'mudou' : 'mudaram'} de mês · ${n} parcelas futuras lançadas`;
+}
+function vReparo() {
+  const r = reparo(D); if (!r.mover.length && !r.parc) return '';
+  return `<section class="card"><h2>Conferir faturas já importadas</h2><div class="rows" style="margin-top:6px">
+    ${r.mover.map(m => `<div class="row"><span class="nm"><b>${esc(m.nome)}</b>: a fatura lançada em ${ymCurto(m.de)} tem compras até ${dm(m.ult)}, então deve vencer em <b>${ymCurto(m.para)}</b>.</span><button class="btn sm ghost" data-okfat="${esc(m.cid)}|${m.de}">Está certa em ${ymCurto(m.de)}</button></div>`).join('')}
+    ${r.parc ? `<div class="row"><span class="nm">${r.parc} parcelas futuras de compras parceladas ainda não foram lançadas nas próximas faturas.</span></div>` : ''}</div>
+    <div class="acts" style="justify-content:flex-start"><button class="btn" data-act="reparo">Corrigir agora</button></div></section>`;
+}
+
 function vCartoes() {
   const c = cfg(), cards = Object.entries(D.cartoes);
   if (!cards.length) return `<section class="card empty"><p>Nenhum cartão cadastrado ainda.<br>Cadastre o cartão e depois importe a fatura (CSV ou OFX) ou digite o valor.</p><button class="btn" data-act="novo-cartao">Cadastrar cartão</button></section>`;
-  return `<div class="hd"><span class="grow"></span><button class="btn ghost" data-act="novo-cartao">+ Novo cartão</button></div>` + cards.map(([id, x]) => {
+  return `<div class="hd"><span class="grow"></span><button class="btn ghost" data-act="novo-cartao">+ Novo cartão</button></div>` + vReparo() + cards.map(([id, x]) => {
     const tot = faturaTotal(id, S.ym), manual = (D.fatManual[id] || {})[S.ym], l = Object.entries(D.lanc).map(([lid, v]) => ({ ...v, id: lid })).filter(v => v.cartao === id && v.fatura === S.ym).sort((p, q) => q.data.localeCompare(p.data));
     return `<section class="card"><div class="cardview"><div>${plastic(id, x, 'wide')}<div style="margin-top:12px"><button class="btn sm ghost" data-kedit="${esc(id)}">Editar cartão</button></div></div>
       <div><div class="hd"><h2>Fatura que vence em ${ymNome(S.ym)} <small>· ${x.tipo === 'casa' ? 'dividida entre os dois' : 'pessoal de ' + esc(c.nomes[x.dono])}</small></h2></div>
@@ -620,6 +656,7 @@ $('#i-go').onclick = () => {
     if (w.dest === 'contas') { for (const x of items) d.contas[uid()] = { nome: x.desc, valor: x.valor, dia: x.dia, tipo: 'casa', pagador: x.pagador, moradia: false, recorrente: true, mes: null }; return `${items.length} contas importadas. Confira em Nossa casa.`; }
     const card = d.cartoes[w.cartao]; if (w.dest === 'cartao' && !card) return 'O cartão não existe mais. Nada foi importado.';
     if (w.dest === 'cartao' && w.subst && items.length) for (const [id, o] of Object.entries(d.lanc)) if (o.prev && o.cartao === w.cartao && o.fatura === w.fatura) delete d.lanc[id];
+    if (w.dest === 'cartao' && card) (card.confere = card.confere || {})[w.fatura] = true;
     const pre = w.dest === 'cartao' ? 'k:' + w.cartao + ':' : 'c:' + w.pessoa + ':', have = new Set(Object.values(d.lanc).map(l => l.chave)), seen = {}, novos = []; let dup = 0;
     for (const x of items) {
       const base = pre + (x.fitid ? 'f:' + x.fitid : x.data + '|' + x.valor + '|' + x.desc); seen[base] = (seen[base] || 0) + 1; const chave = base + '#' + seen[base];
@@ -669,7 +706,7 @@ document.addEventListener('change', e => {
 async function pick(mode) { const r = await store.pick(mode); if (r.canceled) return; await load(); S.ready = true; render(true); }
 document.addEventListener('click', e => {
   if (e.target.closest('[data-close]')) { e.target.closest('dialog').close(); return; }
-  const t = e.target.closest('[data-eu],[data-pagar],[data-edit],[data-dia],[data-mor],[data-act],[data-go],[data-tema],[data-fluxo],[data-del],[data-kedit],[data-fman],[data-fauto],[data-wipe],[data-delconta],[data-redit],[data-fedit],[data-aporte],[data-amadd],[data-amdel],[data-amfeita],[data-delextra]'); if (!t) return; const d = t.dataset;
+  const t = e.target.closest('[data-eu],[data-pagar],[data-edit],[data-dia],[data-mor],[data-act],[data-go],[data-tema],[data-fluxo],[data-del],[data-kedit],[data-fman],[data-fauto],[data-wipe],[data-delconta],[data-redit],[data-fedit],[data-aporte],[data-amadd],[data-amdel],[data-amfeita],[data-delextra],[data-okfat]'); if (!t) return; const d = t.dataset;
   if (d.eu) { S.eu = d.eu; ls.set('eu', S.eu); render(true); }
   else if (d.tema) { const cur = document.documentElement.dataset.theme; if (cur === d.tema) { delete document.documentElement.dataset.theme; ls.set('tema', ''); } else { document.documentElement.dataset.theme = d.tema; ls.set('tema', d.tema); } render(); }
   else if (d.pagar) { const id = d.pagar, ym = S.ym; mutate(x => { const m = mesDe(x, ym); if (m.pagas[id]) delete m.pagas[id]; else m.pagas[id] = true; }); }
@@ -702,6 +739,8 @@ document.addEventListener('click', e => {
     if (!nome || !(valor > 0) || !/^\d{4}-\d{2}$/.test(mes)) { toast('Informe descrição, valor maior que zero e o mês.'); return; }
     if (document.activeElement) document.activeElement.blur();
     mutate(x => { x.extras[uid()] = { nome, valor, mes, pessoa }; }, `Recebimento de ${brl(valor)} lançado em ${ymCurto(mes)}`); }
+  else if (d.act === 'reparo') mutate(x => aplicaReparo(x));
+  else if (d.okfat) { const [cid, fat] = d.okfat.split('|'); mutate(x => { const c = x.cartoes[cid]; if (c) (c.confere = c.confere || {})[fat] = true; }, 'Fatura mantida nesse mês'); }
   else if (d.act === 'check-upd') { if (store.checkUpdate) store.checkUpdate().then(r => { S.upd = r; render(); }); }
   else if (d.act === 'atualizar') store.installUpdate && store.installUpdate();
   else if (d.act === 'nova-dividida') openConta(null, { titulo: 'Nova conta dividida', div: 'igual' });
@@ -734,6 +773,6 @@ addEventListener('hashchange', route);
 const tema = ls.get('tema'); if (tema === 'light' || tema === 'dark') document.documentElement.dataset.theme = tema;
 route();
 if (store.onUpdateState) store.onUpdateState(u => { S.upd = u; if (u.state === 'ready') S.update = true; if (S.view === 'dados' || u.state === 'ready') render(); });
-if (store.onUpdate) { store.onUpdate(() => { S.update = true; render(); }); store.updateStatus().then(r => { if (r) { S.update = true; render(); } }); store.version().then(v => { S.versao = v; }); }
+if (store.onUpdate) { store.onUpdate(() => { S.update = true; render(); }); store.updateStatus().then(r => { if (r) { S.update = true; render(); } }); store.version().then(v => { S.versao = v; $('#ver').textContent = 'versão ' + v; }); }
 store.onChanged(() => { q = q.then(load).then(() => render()); });
 load().then(() => { S.ready = true; render(true); }, () => { S.ready = true; S.loadErr = 'read'; render(true); });

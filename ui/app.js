@@ -22,7 +22,7 @@ const dm = iso => iso.slice(8) + '/' + iso.slice(5, 7);
 // Fora do programa instalado (aberto direto no navegador), guarda no próprio navegador.
 const store = window.api || (() => { const K = 'casa-em-dia'; return { status: async () => ({ path: 'navegador' }), pick: async () => ({ path: 'navegador' }), load: async () => ({ path: 'navegador', json: ls.get(K) }), save: async j => ls.set(K, j), reveal: async () => { }, onChanged() { } }; })();
 
-const vazio = () => ({ v: 1, config: null, contas: {}, cartoes: {}, lanc: {}, fatManual: {}, meses: {}, reservas: {}, financ: {} });
+const vazio = () => ({ v: 1, config: null, contas: {}, cartoes: {}, lanc: {}, fatManual: {}, meses: {}, reservas: {}, financ: {}, extras: {} });
 const norm = d => ({ ...vazio(), ...(d && typeof d === 'object' && !Array.isArray(d) ? d : {}) });
 let D = vazio();
 
@@ -55,7 +55,8 @@ function calc(ym = S.ym) {
   const pessoal = { a: sum(list.filter(x => x.tipo === 'pessoal' && x.pagador === 'a')), b: sum(list.filter(x => x.tipo === 'pessoal' && x.pagador === 'b')) };
   const rs = Object.values(D.reservas), reserva = { a: r2(rs.reduce((t, x) => t + (+(x.aporte || {}).a || 0), 0)), b: r2(rs.reduce((t, x) => t + (+(x.aporte || {}).b || 0), 0)) };
   const mes = D.meses[ym] || {};
-  return { reserva, c, list, casa, T, ratio: { a: ef, b: 1 - ef }, fracA, parte, pago, devido, pessoal, pagas: mes.pagas || {}, acerto: !!mes.acerto };
+  const ex = Object.values(D.extras).filter(x => x.mes === ym), extra = { a: sum(ex.filter(x => x.pessoa === 'a')), b: sum(ex.filter(x => x.pessoa === 'b')) };
+  return { extra, reserva, c, list, casa, T, ratio: { a: ef, b: 1 - ef }, fracA, parte, pago, devido, pessoal, pagas: mes.pagas || {}, acerto: !!mes.acerto };
 }
 const divLbl = (x, k) => x.div === 'igual' ? 'meio a meio' : x.div === 'pct' ? `${Math.round(k.fracA(x) * 100)}% / ${100 - Math.round(k.fracA(x) * 100)}%` : 'divisão do casal';
 
@@ -68,7 +69,7 @@ function plastic(id, c, extra) {
 }
 
 function vVisao() {
-  const k = calc(), { c } = k, eu = S.eu, ou = outro(eu), sal = +c.salarios[eu] || 0, dd = +c.diaadia[eu] || 0;
+  const k = calc(), { c } = k, eu = S.eu, ou = outro(eu), sal0 = +c.salarios[eu] || 0, ext = k.extra[eu], sal = r2(sal0 + ext), dd = +c.diaadia[eu] || 0;
   const res = k.reserva[eu], sobra = r2(sal - k.devido[eu] - k.pessoal[eu] - dd - res);
   const base0 = Math.max(sal, k.devido[eu] + k.pessoal[eu] + dd + res), p = v => sal > 0 ? v / sal : 0, w = v => base0 > 0 ? Math.max(0, v / base0 * 100) : 0;
   const minhas = k.list.filter(x => x.tipo === 'casa' || x.pagador === eu), abertas = minhas.filter(x => !k.pagas[x.id]);
@@ -81,7 +82,7 @@ function vVisao() {
     acerto = `<span>${deve === eu ? `Você devolve <b>${brl(v)}</b> para ${esc(c.nomes[ou])} no Pix` : `${esc(c.nomes[deve])} te devolve <b>${brl(v)}</b> no Pix`}</span><button class="btn sm ${k.acerto ? '' : 'ghost'}" data-act="acerto">${k.acerto ? '✓ Feito' : 'Marcar feito'}</button>`; }
   const pa = k.T ? k.pago.a / k.T * 100 : 50;
   const mor = k.casa.filter(x => x.moradia), morT = sum(mor), casal = S.mor === 'casal';
-  const base = casal ? (+c.salarios.a || 0) + (+c.salarios.b || 0) : sal, morV = casal ? morT : r2(mor.reduce((t, x) => t + k.parte(x, eu), 0)), mp = base > 0 ? morV / base : 0;
+  const base = casal ? (+c.salarios.a || 0) + (+c.salarios.b || 0) : sal0, morV = casal ? morT : r2(mor.reduce((t, x) => t + k.parte(x, eu), 0)), mp = base > 0 ? morV / base : 0;
   const cards = Object.entries(D.cartoes), prox = [0, 1, 2].map(n => { const ym = ymAdd(S.ym, n); return { ym, v: r2(cards.reduce((s, [id]) => s + faturaTotal(id, ym), 0)) }; }), mx = Math.max(1, ...prox.map(x => x.v));
 
   return `${D.config ? '' : `<div class="banner">Comece em <b>Nossa renda</b>: coloque os nomes e os salários de vocês. Depois adicione as contas ou importe uma planilha.</div>`}
@@ -89,11 +90,11 @@ function vVisao() {
     <section class="card">
       <h2>Saldo previsto <small>· ${esc(c.nomes[eu])}</small></h2>
       <div class="hero">${big(sobra, 'xl')}
-        <div class="note">${sal > 0 ? `<div class="${sobra >= 0 ? 'good' : 'badc'}">${sobra >= 0 ? '↗' : '↘'} ${pct(p(sobra))} do salário ${sobra >= 0 ? 'livre' : 'no vermelho'}</div>` : `<div class="badc">Informe os salários em Nossa renda</div>`}
+        <div class="note">${sal > 0 ? `<div class="${sobra >= 0 ? 'good' : 'badc'}">${sobra >= 0 ? '↗' : '↘'} ${pct(p(sobra))} ${ext > 0 ? 'da renda do mês' : 'do salário'} ${sobra >= 0 ? 'livre' : 'no vermelho'}</div>` : `<div class="badc">Informe os salários em Nossa renda</div>`}
         <div class="sub">valor estimado depois de pagar as contas e guardar a reserva do mês</div></div></div>
       <div class="bar" role="img" aria-label="Para onde vai o salário"><i style="width:${w(k.devido[eu])}%;background:var(--navy)"></i><i style="width:${w(k.pessoal[eu])}%;background:var(--accent)"></i><i style="width:${w(dd)}%;background:var(--faint)"></i><i style="width:${w(res)}%;background:var(--warn)"></i><i style="width:${w(Math.max(0, sobra))}%;background:var(--ok)"></i></div>
       <div class="legend">
-        <div><div class="k">Salário</div><div class="v">${brl(sal)}</div></div>
+        <div><div class="k">Salário</div><div class="v">${brl(sal0)}</div></div>${ext > 0 ? `<div><div class="k"><span class="dot g"></span>Recebimentos extras</div><div class="v good">+ ${brl(ext)}</div></div>` : ''}
         <div><div class="k"><span class="dot n"></span>Sua parte da casa</div><div class="v">− ${brl(k.devido[eu])} <small>· ${pct(p(k.devido[eu]))}</small></div></div>
         <div><div class="k"><span class="dot a"></span>Contas pessoais</div><div class="v">− ${brl(k.pessoal[eu])} <small>· ${pct(p(k.pessoal[eu]))}</small></div></div>
         <div><div class="k"><span class="dot f"></span>Dia a dia</div><div class="v">− ${brl(dd)} <small>· ${pct(p(dd))}</small></div></div>
@@ -197,6 +198,7 @@ function vCasa() {
       : `<div class="empty">Nenhuma conta em ${ymNome(S.ym)}. Lance aqui financiamento do carro, da casa, condomínio, e marque em cada uma se vocês dividem ou se é pessoal.</div>`}</section>
   <section class="card"><div class="hd"><h2>Próximos meses</h2><button class="btn sm ghost" data-act="futura">+ Lançar conta futura</button></div>
     <div class="tblx" style="margin-top:10px"><table><thead><tr><th></th>${prox.map(p => `<th class="r">${MESES[+p.ym.slice(5) - 1].slice(0, 3)}/${p.ym.slice(2, 4)}</th>`).join('')}</tr></thead><tbody>
+      <tr><td>Recebimentos extras</td>${prox.map(p => { const v = r2(p.q.extra.a + p.q.extra.b); return `<td class="r ${v > 0 ? 'good' : ''}">${v > 0 ? '+ ' + brl(v) : '—'}</td>`; }).join('')}</tr>
       <tr><td>Contas da casa</td>${prox.map(p => `<td class="r">${brl(p.q.T)}</td>`).join('')}</tr>
       ${['a', 'b'].map(w => `<tr><td><span class="dot ${w}"></span> Parte de ${esc(c.nomes[w])}</td>${prox.map(p => `<td class="r">${brl(p.q.devido[w])}</td>`).join('')}</tr><tr><td><span class="dot ${w}"></span> Pessoais de ${esc(c.nomes[w])}</td>${prox.map(p => `<td class="r">${brl(p.q.pessoal[w])}</td>`).join('')}</tr>`).join('')}
     </tbody></table></div>
@@ -288,7 +290,11 @@ function vRenda() {
     <div class="f" id="pct-f" ${c.divisao === 'custom' ? '' : 'hidden'}><label for="pctA">Parte de ${esc(c.nomes.a)} (%)</label><input type="number" id="pctA" min="0" max="100" value="${+c.pctA || 50}"></div>
     <div class="full err" id="cfg-err" hidden></div>
     <div class="acts full"><button class="btn" type="submit">Salvar</button></div>
-  </form></section>`;
+  </form></section>
+  <section class="card"><h2>Recebimentos extras</h2><p class="sub" style="margin:4px 0 12px">13º, férias, bônus, restituição, venda de algo… Entram no Saldo previsto de quem recebeu, só no mês escolhido. Não mudam a divisão proporcional das contas, que segue o salário.</p>
+    <div class="inline"><input type="text" id="x-nome" maxlength="40" placeholder="Ex.: 13º salário" aria-label="Descrição" style="width:200px"><input type="text" inputmode="decimal" id="x-valor" placeholder="Valor (R$)" aria-label="Valor"><input type="month" id="x-mes" value="${S.ym}" aria-label="Mês" style="width:160px">
+      <select id="x-pessoa" class="sel" aria-label="Quem recebe">${['a', 'b'].map(p => `<option value="${p}" ${S.eu === p ? 'selected' : ''}>${esc(c.nomes[p])}</option>`).join('')}</select><button class="btn sm" data-act="add-extra">Adicionar</button></div>
+    <div class="rows" style="margin-top:8px">${(() => { const l = Object.entries(D.extras).map(([id, x]) => ({ ...x, id })).filter(x => x.mes >= S.ym).sort((p, q) => p.mes.localeCompare(q.mes)); return l.length ? l.map(x => `<div class="row"><span class="dot ${x.pessoa}"></span><span class="nm">${esc(x.nome)}</span><span class="tag">${ymCurto(x.mes)}</span><span class="tag">${esc(c.nomes[x.pessoa])}</span><span class="num pos">+ ${brl(x.valor)}</span><button class="x" data-delextra="${esc(x.id)}" aria-label="Excluir ${esc(x.nome)}">×</button></div>`).join('') : `<div class="empty">Nenhum recebimento extra de ${ymNome(S.ym)} em diante.</div>`; })()}</div></section>`;
 }
 
 function updMsg() { const u = S.upd || {}; return u.state === 'checking' ? 'Procurando…' : u.state === 'downloading' ? `Baixando a versão ${u.version || 'nova'}… ${u.pct || 0}%` : u.state === 'ready' ? 'Versão nova baixada. Clique em “Reiniciar e atualizar” no topo.' : u.state === 'none' ? 'Você já está na versão mais recente.' : u.state === 'error' ? 'Não consegui procurar agora. Confira a internet e tente de novo.' : u.state === 'dev' ? 'Disponível só no app instalado.' : ''; }
@@ -578,7 +584,7 @@ document.addEventListener('change', e => {
 async function pick(mode) { const r = await store.pick(mode); if (r.canceled) return; await load(); S.ready = true; render(true); }
 document.addEventListener('click', e => {
   if (e.target.closest('[data-close]')) { e.target.closest('dialog').close(); return; }
-  const t = e.target.closest('[data-eu],[data-pagar],[data-edit],[data-dia],[data-mor],[data-act],[data-go],[data-tema],[data-fluxo],[data-del],[data-kedit],[data-fman],[data-fauto],[data-wipe],[data-delconta],[data-redit],[data-fedit],[data-aporte],[data-amadd],[data-amdel],[data-amfeita]'); if (!t) return; const d = t.dataset;
+  const t = e.target.closest('[data-eu],[data-pagar],[data-edit],[data-dia],[data-mor],[data-act],[data-go],[data-tema],[data-fluxo],[data-del],[data-kedit],[data-fman],[data-fauto],[data-wipe],[data-delconta],[data-redit],[data-fedit],[data-aporte],[data-amadd],[data-amdel],[data-amfeita],[data-delextra]'); if (!t) return; const d = t.dataset;
   if (d.eu) { S.eu = d.eu; ls.set('eu', S.eu); render(true); }
   else if (d.tema) { const cur = document.documentElement.dataset.theme; if (cur === d.tema) { delete document.documentElement.dataset.theme; ls.set('tema', ''); } else { document.documentElement.dataset.theme = d.tema; ls.set('tema', d.tema); } render(); }
   else if (d.pagar) { const id = d.pagar, ym = S.ym; mutate(x => { const m = mesDe(x, ym); if (m.pagas[id]) delete m.pagas[id]; else m.pagas[id] = true; }); }
@@ -606,6 +612,11 @@ document.addEventListener('click', e => {
     }); }
   else if (d.act === 'futura') openConta(null, { titulo: 'Lançar conta futura', quando: 'unico', inicio: ymAdd(S.ym, 1) });
   else if (d.act === 'nova-pessoal') openConta(null, { titulo: 'Nova conta pessoal', tipo: 'pessoal' });
+  else if (d.delextra) { const id = d.delextra; mutate(x => { delete x.extras[id]; }, 'Recebimento excluído'); }
+  else if (d.act === 'add-extra') { const nome = $('#x-nome').value.trim(), valor = inMoney($('#x-valor').value), mes = $('#x-mes').value, pessoa = $('#x-pessoa').value;
+    if (!nome || !(valor > 0) || !/^\d{4}-\d{2}$/.test(mes)) { toast('Informe descrição, valor maior que zero e o mês.'); return; }
+    if (document.activeElement) document.activeElement.blur();
+    mutate(x => { x.extras[uid()] = { nome, valor, mes, pessoa }; }, `Recebimento de ${brl(valor)} lançado em ${ymCurto(mes)}`); }
   else if (d.act === 'check-upd') { if (store.checkUpdate) store.checkUpdate().then(r => { S.upd = r; render(); }); }
   else if (d.act === 'atualizar') store.installUpdate && store.installUpdate();
   else if (d.act === 'nova-dividida') openConta(null, { titulo: 'Nova conta dividida', div: 'igual' });

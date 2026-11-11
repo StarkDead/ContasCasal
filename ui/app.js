@@ -41,6 +41,7 @@ function faturaTotal(cid, ym) {
 function bills(ym) {
   const l = Object.entries(D.contas).map(([id, x]) => ({ ...x, id, nome: String(x.nome || 'Sem nome'), valor: +x.valor || 0 })).filter(x => x.recorrente ? (!x.inicio || x.inicio <= ym) && (!x.fim || ym <= x.fim) : x.mes === ym).map(x => x.inicio && x.fim ? { ...x, parc: ymDiff(x.inicio, ym) + 1, parcN: ymDiff(x.inicio, x.fim) + 1 } : x);
   for (const [id, c] of Object.entries(D.cartoes)) { const v = faturaTotal(id, ym); if (v > 0) l.push({ id: 'fat-' + id, nome: 'Fatura ' + c.nome, valor: v, dia: c.dia, tipo: c.tipo, pagador: c.dono, moradia: false, fatura: id, div: c.div, pctA: c.pctA }); }
+  for (const [id, f] of Object.entries(D.financ)) { if (f.gerar === false) continue; const pm = parcelaFin(f, ym); if (pm) l.push({ id: 'fin-' + id, nome: f.nome, valor: pm.valor, dia: +f.dia || 0, tipo: f.tipo || 'casa', pagador: f.pagador || 'a', moradia: !!f.moradia, div: f.div || 'igual', pctA: null, fin: id, recorrente: true, parc: pm.parc, parcN: pm.parcN }); }
   return l.sort((x, y) => (x.dia || 99) - (y.dia || 99) || x.nome.localeCompare(y.nome));
 }
 function calc(ym = S.ym) {
@@ -176,7 +177,7 @@ function vCartoes() {
 }
 
 const tags = (x, k) => `${x.dia ? `<span class="tag">dia ${x.dia}</span>` : ''}${x.fatura ? '<span class="tag">cartão</span>' : x.parcN ? `<span class="tag">parcela ${x.parc}/${x.parcN}</span>` : `<span class="tag">${x.recorrente ? 'todo mês' : 'só este mês'}</span>`}${x.moradia ? '<span class="tag">moradia</span>' : ''}${k.pagas[x.id] ? '<span class="tag ok">paga</span>' : ''}`;
-const delConta = x => x.fatura ? '' : S.confirm === 'conta:' + x.id ? `<button class="btn sm danger" data-delconta="${esc(x.id)}">Excluir?</button>` : `<button class="x" data-delconta="${esc(x.id)}" aria-label="Excluir ${esc(x.nome)}">×</button>`;
+const delConta = x => x.fatura || x.fin ? '' : S.confirm === 'conta:' + x.id ? `<button class="btn sm danger" data-delconta="${esc(x.id)}">Excluir?</button>` : `<button class="x" data-delconta="${esc(x.id)}" aria-label="Excluir ${esc(x.nome)}">×</button>`;
 function vCasa() {
   const k = calc(), { c } = k;
   const grupo = (t, l) => `<section class="card"><h2>${t} <small>· ${brl(sum(l))}</small></h2><div class="rows" style="margin-top:8px">${l.length ? l.map(x => `<div class="row">
@@ -184,11 +185,11 @@ function vCasa() {
   const prox = [0, 1, 2, 3, 4, 5].map(n => { const ym = ymAdd(S.ym, n), q = calc(ym); return { ym, q }; });
   const fut = Object.entries(D.contas).map(([id, x]) => ({ ...x, id, quando: x.recorrente ? x.inicio : x.mes })).filter(x => x.quando && x.quando > S.ym).sort((p, q) => p.quando.localeCompare(q.quando));
   const pa = Math.round(cfg().divisao === 'igual' ? 50 : k.fracA({}) * 100);
-  const sel = x => `<select data-divsel="${esc(x.id)}" aria-label="Como dividir ${esc(x.nome)}"><option value="padrao" ${!x.div || x.div === 'padrao' ? 'selected' : ''}>Divisão do casal (${pa}/${100 - pa})</option><option value="igual" ${x.div === 'igual' ? 'selected' : ''}>Meio a meio</option>${x.div === 'pct' ? `<option value="pct" selected>${Math.round(k.fracA(x) * 100)}% / ${100 - Math.round(k.fracA(x) * 100)}%</option>` : ''}${x.fatura ? '' : '<option value="editar">Outro percentual…</option>'}</select>`;
+  const sel = x => `<select data-divsel="${esc(x.id)}" aria-label="Como dividir ${esc(x.nome)}"><option value="padrao" ${!x.div || x.div === 'padrao' ? 'selected' : ''}>Divisão do casal (${pa}/${100 - pa})</option><option value="igual" ${x.div === 'igual' ? 'selected' : ''}>Meio a meio</option>${x.div === 'pct' ? `<option value="pct" selected>${Math.round(k.fracA(x) * 100)}% / ${100 - Math.round(k.fracA(x) * 100)}%</option>` : ''}${x.fatura || x.fin ? '' : '<option value="editar">Outro percentual…</option>'}</select>`;
   const cel = (x, w) => x.tipo === 'casa' ? brl(k.parte(x, w)) : x.pagador === w ? brl(x.valor) : '<span class="sub">—</span>';
   return `<section class="card"><div class="hd"><h2>Contas de ${ymNome(S.ym)} <small>· marque quais vocês dividem</small></h2><button class="btn sm ghost" data-act="nova-pessoal">+ Conta pessoal</button><button class="btn sm ghost" data-act="nova-dividida">+ Conta dividida</button></div>
     ${k.list.length ? `<div class="tblx"><table><thead><tr><th>Conta</th><th class="r">Valor</th><th>Dividir?</th><th>Como divide</th><th class="r"><span class="dot a"></span> ${esc(c.nomes.a)}</th><th class="r"><span class="dot b"></span> ${esc(c.nomes.b)}</th><th>Quem paga</th><th></th></tr></thead><tbody>
-      ${k.list.map(x => `<tr><td class="w"><button class="nm" data-edit="${esc(x.id)}">${esc(x.nome)}</button> ${x.parcN ? `<span class="tag">${x.parc}/${x.parcN}</span>` : ''}${x.fatura ? '<span class="tag">cartão</span>' : ''}</td><td class="r">${brl(x.valor)}</td>
+      ${k.list.map(x => `<tr><td class="w"><button class="nm" data-edit="${esc(x.id)}">${esc(x.nome)}</button> ${x.parcN ? `<span class="tag">${x.parc}/${x.parcN}</span>` : ''}${x.fatura ? '<span class="tag">cartão</span>' : ''}${x.fin ? '<span class="tag">financiamento</span>' : ''}</td><td class="r">${brl(x.valor)}</td>
         <td><label class="sw"><input type="checkbox" data-divtog="${esc(x.id)}" ${x.tipo === 'casa' ? 'checked' : ''}><span>${x.tipo === 'casa' ? 'Dividida' : 'Pessoal'}</span></label></td>
         <td>${x.tipo === 'casa' ? sel(x) : '<span class="sub">não divide</span>'}</td><td class="r">${cel(x, 'a')}</td><td class="r">${cel(x, 'b')}</td><td><span class="dot ${x.pagador}"></span> ${esc(c.nomes[x.pagador])}</td><td>${delConta(x)}</td></tr>`).join('')}
       <tr class="tot"><td>Total</td><td class="r">${brl(sum(k.list))}</td><td></td><td></td><td class="r">${brl(r2(k.devido.a + k.pessoal.a))}</td><td class="r">${brl(r2(k.devido.b + k.pessoal.b))}</td><td></td><td></td></tr></tbody></table></div>
@@ -219,38 +220,60 @@ function vReserva() {
 }
 
 const price = (s, i, n) => i > 0 ? s * i / (1 - Math.pow(1 + i, -n)) : s / n;
-function simular(f, comPlano) {
-  const i = f.unid === 'aa' ? Math.pow(1 + f.taxa / 100, 1 / 12) - 1 : f.taxa / 100;
-  let saldo = +f.saldo, n = +f.prazo, ym = f.base, juros = 0, meses = 0, extra = 0, p1 = null, pmt = price(saldo, i, n), am = saldo / n;
-  const ex = {}; if (comPlano) for (const a of f.amort || []) (ex[a.ym] = ex[a.ym] || []).push(a);
-  while (saldo > .005 && meses < 720) {
-    const j = saldo * i; let a = f.sistema === 'sac' ? am : pmt - j; if (!(a > 0)) return null; a = Math.min(a, saldo);
-    if (p1 == null) p1 = a + j; juros += j; saldo -= a; meses++; n--;
-    if (comPlano && saldo > 0) { const l = (ex[ym] || []).slice(); if (+f.extraMensal > 0) l.push({ valor: +f.extraMensal, efeito: 'prazo' });
+// Tabela mês a mês do financiamento. modo: 'feitas' = só as amortizações já feitas (a realidade); 'plano' = inclui as planejadas.
+const _tab = new WeakMap();
+function tabela(f, modo) {
+  let c = _tab.get(f); if (!c) _tab.set(f, c = {}); if (c[modo] !== undefined) return c[modo];
+  const i = f.unid === 'aa' ? Math.pow(1 + f.taxa / 100, 1 / 12) - 1 : f.taxa / 100, rows = [];
+  let saldo = +f.saldo, n = +f.prazo, ym = f.base, pmt = price(saldo, i, n), am = saldo / n, ok = true;
+  const ex = {}; for (const a of f.amort || []) if (modo === 'plano' || a.feita) (ex[a.ym] = ex[a.ym] || []).push(a);
+  while (saldo > .005 && rows.length < 720) {
+    const j = saldo * i; let a = f.sistema === 'sac' ? am : pmt - j; if (!(a > 0)) { ok = false; break; } a = Math.min(a, saldo);
+    saldo -= a; n--; let extra = 0;
+    if (saldo > 0) { const l = (ex[ym] || []).slice(); if (modo === 'plano' && +f.extraMensal > 0) l.push({ valor: +f.extraMensal, efeito: 'prazo' });
       for (const e of l) { const v = Math.min(e.valor, saldo); saldo -= v; extra += v; if (e.efeito === 'parcela' && n > 0 && saldo > 0) { pmt = price(saldo, i, n); am = saldo / n; } } }
-    ym = ymAdd(ym, 1);
+    rows.push({ ym, juros: j, amort: a, parcela: r2(a + j), extra }); ym = ymAdd(ym, 1);
   }
-  return { meses, juros: r2(juros), fim: ymAdd(f.base, meses - 1), p1: r2(p1), extra: r2(extra), aberto: saldo > .005 };
+  return c[modo] = ok && rows.length ? { rows, meses: rows.length, juros: r2(rows.reduce((t, r) => t + r.juros, 0)), extra: r2(rows.reduce((t, r) => t + r.extra, 0)), fim: rows[rows.length - 1].ym } : null;
+}
+// Parcela do financiamento em um mês, para entrar nas contas do mês.
+function parcelaFin(f, ym) {
+  const t = tabela(f, 'feitas'); if (!t || ym < f.base || ym > t.fim) return null;
+  const k = ymDiff(f.base, ym), r = t.rows[k]; if (!r) return null;
+  return { valor: +f.boleto > 0 ? +f.boleto : r.parcela, parc: k + 1, parcN: t.meses, amort: r.amort };
+}
+// Saldo devedor hoje: saldo informado menos o que já foi amortizado pelas parcelas marcadas como pagas e pelas amortizações feitas.
+function saldoFin(id, f) {
+  const t = tabela(f, 'feitas'); if (!t) return { saldo: +f.saldo, pagas: 0, total: 0 };
+  let saldo = +f.saldo, pagas = 0;
+  for (const r of t.rows) if (((D.meses[r.ym] || {}).pagas || {})['fin-' + id]) { saldo -= r.amort; pagas++; }
+  for (const a of f.amort || []) if (a.feita) saldo -= a.valor;
+  return { saldo: r2(Math.max(0, saldo)), pagas, total: t.meses };
 }
 function vFinanc() {
-  const fs = Object.entries(D.financ);
-  return `<div class="hd"><span class="grow sub">Simulação pelo saldo, taxa e prazo informados. Não inclui correção (TR/IPCA), seguros nem tarifas do contrato.</span><button class="btn ghost" data-act="novo-fin">+ Novo financiamento</button></div>` + (fs.length ? fs.map(([id, f]) => {
-    const b = simular(f, false), q = simular(f, true), am = (f.amort || []).map((a, ix) => ({ ...a, ix })).sort((x, y) => x.ym.localeCompare(y.ym));
+  const fs = Object.entries(D.financ), c = cfg(), pg = (D.meses[S.ym] || {}).pagas || {};
+  return `<div class="hd"><span class="grow sub">Simulação pelo saldo, taxa e prazo informados. Não inclui correção (TR/IPCA); para seguros e tarifas, informe o valor do boleto no cadastro.</span><button class="btn ghost" data-act="novo-fin">+ Novo financiamento</button></div>` + (fs.length ? fs.map(([id, f]) => {
+    const b = tabela(f, 'feitas'), q = tabela(f, 'plano'), am = (f.amort || []).map((a, ix) => ({ ...a, ix })).sort((x, y) => x.ym.localeCompare(y.ym));
     if (!b || !q) return `<section class="card"><div class="hd"><h2>${esc(f.nome)}</h2><button class="btn sm ghost" data-fedit="${esc(id)}">Editar</button></div><p class="err">Com estes números a parcela não cobre os juros. Confira saldo, taxa e prazo.</p></section>`;
-    const eco = r2(b.juros - q.juros), dm = b.meses - q.meses;
-    return `<section class="card"><div class="hd"><h2>${esc(f.nome)} <small>· ${f.sistema === 'sac' ? 'SAC' : 'Price'} · ${nf.format(f.taxa)}% ${f.unid === 'aa' ? 'a.a.' : 'a.m.'}</small></h2><button class="btn sm ghost" data-fedit="${esc(id)}">Editar</button></div>
-      <div class="stats" style="margin-top:14px"><div><div class="sub">Saldo devedor em ${ymCurto(f.base)}</div>${big(+f.saldo, 'lg')}</div><div><div class="sub">Parcela estimada</div>${big(b.p1, 'md')}</div><div><div class="sub">Prazo restante</div><div class="big md">${f.prazo} <span class="ct">meses</span></div></div></div>
-      <div class="tblx"><table><thead><tr><th></th><th class="r">Sem amortizar</th><th class="r">Com o plano</th><th class="r">Diferença</th></tr></thead><tbody>
+    const eco = r2(b.juros - q.juros), dm = b.meses - q.meses, sf = saldoFin(id, f), pm = parcelaFin(f, S.ym), paga = !!pg['fin-' + id], pago = +f.saldo > 0 ? 1 - sf.saldo / +f.saldo : 0;
+    return `<section class="card"><div class="hd"><h2>${esc(f.nome)} <small>· ${f.sistema === 'sac' ? 'SAC' : 'Price'} · ${nf.format(f.taxa)}% ${f.unid === 'aa' ? 'a.a.' : 'a.m.'} · ${(f.tipo || 'casa') === 'casa' ? 'dividido' : 'pessoal'}, quem paga: ${esc(c.nomes[f.pagador || 'a'])}</small></h2><button class="btn sm ghost" data-fedit="${esc(id)}">Editar</button></div>
+      <div class="stats" style="margin-top:14px"><div><div class="sub">Saldo devedor hoje</div>${big(sf.saldo, 'lg')}<div class="sub">era ${brl(+f.saldo)} em ${ymCurto(f.base)}</div></div>
+        <div><div class="sub">Parcela de ${ymNome(S.ym)}</div>${pm ? big(pm.valor, 'md') + `<div class="sub">parcela ${pm.parc} de ${pm.parcN}${+f.boleto > 0 ? ' · valor do boleto' : ' · estimada'}</div>` : '<div class="sub">sem parcela neste mês</div>'}</div>
+        <div><div class="sub">Parcelas pagas</div><div class="big md">${sf.pagas} <span class="ct">de ${sf.total}</span></div></div></div>
+      <div class="bar" style="margin:14px 0 6px" role="img" aria-label="Quanto do saldo já foi pago"><i style="width:${Math.min(100, pago * 100)}%;background:var(--ok)"></i></div>
+      <div class="inline"><span class="sub grow">${pct1(pago * 100)} do saldo já amortizado. ${f.gerar === false ? 'A parcela não está sendo lançada nas contas do mês.' : 'A parcela entra sozinha nas contas de cada mês; ao marcar como paga, o saldo diminui.'}</span>
+        ${pm && f.gerar !== false ? `<button class="btn sm ${paga ? '' : 'ghost'}" data-pagar="fin-${esc(id)}">${paga ? `✓ Parcela de ${ymNome(S.ym)} paga` : `Marcar parcela de ${ymNome(S.ym)} como paga`}</button>` : ''}</div>
+      <div class="tblx"><table><thead><tr><th></th><th class="r">Sem novas amortizações</th><th class="r">Com o plano</th><th class="r">Diferença</th></tr></thead><tbody>
         <tr><td>Quitação</td><td class="r">${ymCurto(b.fim)}</td><td class="r">${ymCurto(q.fim)}</td><td class="r ${dm > 0 ? 'good' : ''}">${dm > 0 ? `${dm} ${dm === 1 ? 'mês' : 'meses'} antes` : '—'}</td></tr>
         <tr><td>Juros até o fim</td><td class="r">${brl(b.juros)}</td><td class="r">${brl(q.juros)}</td><td class="r ${eco > 0 ? 'good' : ''}">${eco > 0 ? 'economia de ' + brl(eco) : '—'}</td></tr>
-        <tr><td>Amortização extra no plano</td><td class="r">—</td><td class="r">${brl(q.extra)}</td><td class="r"></td></tr></tbody></table></div>
+        <tr><td>Amortização extra</td><td class="r">${brl(b.extra)}</td><td class="r">${brl(q.extra)}</td><td class="r"></td></tr></tbody></table></div>
       <div class="sec">Amortização planejada</div>
       ${+f.extraMensal > 0 ? `<div class="row"><span class="nm">Todo mês</span><span class="tag">reduz o prazo</span><span class="num">${brl(+f.extraMensal)}</span></div>` : ''}
-      <div class="rows">${am.map(a => `<div class="row"><span class="nm">${ymCurto(a.ym)}</span><span class="tag">${a.efeito === 'parcela' ? 'reduz a parcela' : 'reduz o prazo'}</span><span class="num">${brl(a.valor)}</span><button class="x" data-amdel="${esc(id)}|${a.ix}" aria-label="Remover amortização">×</button></div>`).join('')}</div>
+      <div class="rows">${am.map(a => `<div class="row"><span class="nm">${ymCurto(a.ym)}</span><span class="tag">${a.efeito === 'parcela' ? 'reduz a parcela' : 'reduz o prazo'}</span><span class="num">${brl(a.valor)}</span><button class="btn sm ${a.feita ? '' : 'ghost'}" data-amfeita="${esc(id)}|${a.ix}">${a.feita ? '✓ Feita' : 'Marcar feita'}</button><button class="x" data-amdel="${esc(id)}|${a.ix}" aria-label="Remover amortização">×</button></div>`).join('')}</div>
       ${!am.length && !(+f.extraMensal > 0) ? `<div class="sub" style="margin:6px 0">Nada planejado ainda. Lance abaixo um valor (13º, FGTS, bônus…) e veja o efeito na quitação e nos juros.</div>` : ''}
       <div class="inline" style="margin-top:10px"><input type="month" id="am-ym-${esc(id)}" value="${ymAdd(S.ym, 1)}" aria-label="Mês da amortização" style="width:160px"><input type="text" inputmode="decimal" id="am-v-${esc(id)}" placeholder="Valor (R$)" aria-label="Valor da amortização">
         <select id="am-e-${esc(id)}" aria-label="Efeito" class="sel"><option value="prazo">Reduzir o prazo</option><option value="parcela">Reduzir a parcela</option></select><button class="btn sm" data-amadd="${esc(id)}">Adicionar ao plano</button></div></section>`; }).join('')
-    : `<section class="card empty">Nenhum financiamento cadastrado. Cadastre o do carro e o da casa com saldo devedor, taxa e prazo que estão no contrato ou no extrato do banco, e planeje as amortizações.</section>`);
+    : `<section class="card empty">Nenhum financiamento cadastrado. Cadastre o do carro e o da casa com saldo devedor, taxa e prazo que estão no contrato ou no extrato do banco. A parcela entra sozinha nas contas do mês.</section>`);
 }
 
 function vRenda() {
@@ -321,12 +344,14 @@ function mutate(fn, ok) {
   }).catch(e => { console.error(e); toast('Não deu para salvar. Confira se o arquivo de dados está acessível.'); });
   return q;
 }
+const alvo = (d, id) => id.startsWith('fat-') ? d.cartoes[id.slice(4)] : id.startsWith('fin-') ? d.financ[id.slice(4)] : d.contas[id];
 const mesDe = (d, ym) => (d.meses[ym] = d.meses[ym] || { pagas: {} }, d.meses[ym].pagas = d.meses[ym].pagas || {}, d.meses[ym]);
 
 /* ---------- conta ---------- */
 function fillPessoas(sel) { const c = cfg(); sel.innerHTML = ['a', 'b'].map(p => `<option value="${p}">${esc(c.nomes[p])}</option>`).join(''); }
 function openConta(id, pre) {
   if (id && id.startsWith('fat-')) { location.hash = 'cartoes'; return; }
+  if (id && id.startsWith('fin-')) { location.hash = 'financ'; return; }
   const x = id ? D.contas[id] : null; if (id && !x) return; S.editing = id || null; pre = pre || {};
   $('#dlg-t').textContent = x ? 'Editar conta' : pre.titulo || 'Nova conta';
   $('#c-nome').value = x ? x.nome : ''; $('#c-valor').value = x ? money(x.valor) : ''; $('#c-dia').value = x && x.dia || '';
@@ -401,14 +426,16 @@ function openFin(id) {
   const x = id ? D.financ[id] : null; if (id && !x) return; S.editing = id || null;
   $('#f-t').textContent = x ? 'Editar financiamento' : 'Novo financiamento'; $('#f-nome').value = x ? x.nome : ''; $('#f-saldo').value = x ? money(x.saldo) : ''; $('#f-base').value = x ? x.base : S.ym;
   $('#f-taxa').value = x ? String(x.taxa).replace('.', ',') : ''; $('#f-unid').value = x ? x.unid : 'aa'; $('#f-sis').value = x ? x.sistema : 'sac'; $('#f-prazo').value = x ? x.prazo : ''; $('#f-extra').value = x ? money(x.extraMensal) : '';
+  $('#f-dia').value = x && x.dia || ''; fillPessoas($('#f-pag')); $('#f-pag').value = x && x.pagador || S.eu; $('#f-tipo').value = x && x.tipo || 'casa'; $('#f-div').value = x && x.div || 'igual';
+  $('#f-boleto').value = x ? money(x.boleto) : ''; $('#f-mor').checked = !!(x && x.moradia); $('#f-gerar').checked = !x || x.gerar !== false;
   resetDel($('#f-del'), !x); $('#f-err').hidden = true; $('#dfin').showModal();
 }
 $('#f-del').onclick = e => { if (!sure(e.currentTarget)) return; const id = S.editing; mutate(d => { delete d.financ[id]; }, 'Financiamento excluído'); $('#dfin').close(); };
 $('#ffin').onsubmit = e => {
-  e.preventDefault(); const nome = $('#f-nome').value.trim(), saldo = inMoney($('#f-saldo').value), taxa = Parse.num($('#f-taxa').value.replace('%', '')), prazo = parseInt($('#f-prazo').value, 10) || 0, extra = inMoney($('#f-extra').value), base = $('#f-base').value, err = $('#f-err');
-  const msg = !nome ? 'Dê um nome, como “Financiamento da casa”.' : !(saldo > 0) ? 'Informe o saldo devedor atual.' : !(taxa >= 0 && taxa < 100) ? 'Informe a taxa de juros, como 9,5.' : !(prazo >= 1 && prazo <= 600) ? 'Informe quantas parcelas faltam.' : !/^\d{4}-\d{2}$/.test(base) ? 'Informe o mês do saldo.' : isNaN(extra) ? 'Confira o valor da amortização mensal.' : '';
+  e.preventDefault(); const nome = $('#f-nome').value.trim(), saldo = inMoney($('#f-saldo').value), taxa = Parse.num($('#f-taxa').value.replace('%', '')), prazo = parseInt($('#f-prazo').value, 10) || 0, extra = inMoney($('#f-extra').value), boleto = inMoney($('#f-boleto').value), dia = parseInt($('#f-dia').value, 10) || 0, base = $('#f-base').value, err = $('#f-err');
+  const msg = !nome ? 'Dê um nome, como “Financiamento da casa”.' : !(saldo > 0) ? 'Informe o saldo devedor atual.' : !(taxa >= 0 && taxa < 100) ? 'Informe a taxa de juros, como 9,5.' : !(prazo >= 1 && prazo <= 600) ? 'Informe quantas parcelas faltam.' : !/^\d{4}-\d{2}$/.test(base) ? 'Informe o mês do saldo.' : isNaN(extra) ? 'Confira o valor da amortização mensal.' : isNaN(boleto) ? 'Confira o valor do boleto.' : (dia < 0 || dia > 31) ? 'O dia do vencimento vai de 1 a 31.' : '';
   if (msg) { err.textContent = msg; err.hidden = false; return; }
-  const id = S.editing; mutate(d => { const old = id && d.financ[id]; d.financ[id || uid()] = { nome, saldo, base, taxa, unid: $('#f-unid').value, sistema: $('#f-sis').value, prazo, extraMensal: extra, amort: (old && old.amort) || [] }; }, 'Financiamento salvo'); $('#dfin').close();
+  const id = S.editing; mutate(d => { const old = id && d.financ[id]; d.financ[id || uid()] = { nome, saldo, base, taxa, unid: $('#f-unid').value, sistema: $('#f-sis').value, prazo, extraMensal: extra, dia, pagador: $('#f-pag').value, tipo: $('#f-tipo').value, div: $('#f-div').value, boleto, moradia: $('#f-mor').checked, gerar: $('#f-gerar').checked, amort: (old && old.amort) || [] }; }, 'Financiamento salvo'); $('#dfin').close();
 };
 
 /* ---------- importação ---------- */
@@ -520,16 +547,16 @@ document.addEventListener('change', e => {
   const t = e.target;
   if (t.id === 'divisao') $('#pct-f').hidden = t.value !== 'custom';
   if (t.dataset.divtog) { const id = t.dataset.divtog, tipo = t.checked ? 'casa' : 'pessoal';
-    mutate(d => { const o = id.startsWith('fat-') ? d.cartoes[id.slice(4)] : d.contas[id]; if (o) o.tipo = tipo; }, tipo === 'casa' ? 'Conta marcada como dividida' : 'Conta marcada como pessoal'); return; }
+    mutate(d => { const o = alvo(d, id); if (o) o.tipo = tipo; }, tipo === 'casa' ? 'Conta marcada como dividida' : 'Conta marcada como pessoal'); return; }
   if (t.dataset.divsel) { const id = t.dataset.divsel, v = t.value; if (v === 'pct') return; if (v === 'editar') { render(true); openConta(id); $('#c-div').value = 'pct'; tipoLbl(); return; }
-    mutate(d => { const o = id.startsWith('fat-') ? d.cartoes[id.slice(4)] : d.contas[id]; if (o) { o.div = v; o.pctA = null; } }, 'Divisão atualizada'); return; }
+    mutate(d => { const o = alvo(d, id); if (o) { o.div = v; o.pctA = null; } }, 'Divisão atualizada'); return; }
   if (t.dataset.link) { const id = t.dataset.link, alvo = t.value;
     mutate(d => { const l = d.lanc[id]; if (!l) return; const mes = mesDe(d, l.data.slice(0, 7)); if (l.conta) delete mes.pagas[l.conta]; if (alvo) { l.conta = alvo; mes.pagas[alvo] = true; } else delete l.conta; }, alvo ? 'Conta marcada como paga' : 'Vínculo removido'); }
 });
 async function pick(mode) { const r = await store.pick(mode); if (r.canceled) return; await load(); S.ready = true; render(true); }
 document.addEventListener('click', e => {
   if (e.target.closest('[data-close]')) { e.target.closest('dialog').close(); return; }
-  const t = e.target.closest('[data-eu],[data-pagar],[data-edit],[data-dia],[data-mor],[data-act],[data-go],[data-tema],[data-fluxo],[data-del],[data-kedit],[data-fman],[data-fauto],[data-wipe],[data-delconta],[data-redit],[data-fedit],[data-aporte],[data-amadd],[data-amdel]'); if (!t) return; const d = t.dataset;
+  const t = e.target.closest('[data-eu],[data-pagar],[data-edit],[data-dia],[data-mor],[data-act],[data-go],[data-tema],[data-fluxo],[data-del],[data-kedit],[data-fman],[data-fauto],[data-wipe],[data-delconta],[data-redit],[data-fedit],[data-aporte],[data-amadd],[data-amdel],[data-amfeita]'); if (!t) return; const d = t.dataset;
   if (d.eu) { S.eu = d.eu; ls.set('eu', S.eu); render(true); }
   else if (d.tema) { const cur = document.documentElement.dataset.theme; if (cur === d.tema) { delete document.documentElement.dataset.theme; ls.set('tema', ''); } else { document.documentElement.dataset.theme = d.tema; ls.set('tema', d.tema); } render(); }
   else if (d.pagar) { const id = d.pagar, ym = S.ym; mutate(x => { const m = mesDe(x, ym); if (m.pagas[id]) delete m.pagas[id]; else m.pagas[id] = true; }); }
@@ -569,6 +596,7 @@ document.addEventListener('click', e => {
   else if (d.amadd) { const id = d.amadd, ym = $('#am-ym-' + id).value, v = inMoney($('#am-v-' + id).value), ef = $('#am-e-' + id).value;
     if (!/^\d{4}-\d{2}$/.test(ym) || !(v > 0)) { toast('Informe o mês e um valor maior que zero.'); return; }
     mutate(x => { const f = x.financ[id]; if (!f) return; (f.amort = f.amort || []).push({ ym, valor: v, efeito: ef }); }, 'Amortização adicionada ao plano'); }
+  else if (d.amfeita) { const [id, ix] = d.amfeita.split('|'); mutate(x => { const a = x.financ[id] && (x.financ[id].amort || [])[+ix]; if (!a) return; a.feita = !a.feita; return a.feita ? 'Amortização feita: o saldo devedor diminuiu' : 'Amortização voltou a ser só planejada'; }); }
   else if (d.amdel) { const [id, ix] = d.amdel.split('|'); mutate(x => { const f = x.financ[id]; if (f && f.amort) f.amort.splice(+ix, 1); }, 'Amortização removida'); }
   else if (d.act === 'novo-cartao') openCard();
   else if (d.act === 'importar') openImp('extrato');

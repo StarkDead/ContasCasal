@@ -56,12 +56,12 @@
     <div class="f full"><label for="c-nome">Nome</label><input type="text" id="c-nome" maxlength="60" placeholder="Ex.: Aluguel"></div>
     <div class="f"><label for="c-valor">Valor previsto (R$)</label><input type="text" id="c-valor" inputmode="decimal" placeholder="0,00"></div>
     <div class="f"><label for="c-dia">Dia do vencimento</label><input type="number" id="c-dia" min="1" max="31" placeholder="5"></div>
-    <div class="f"><label for="c-tipo">Vocês dividem?</label><select id="c-tipo"><option value="casa">Sim, dividida entre nós</option><option value="pessoal">Não, é pessoal</option></select></div>
+    <div class="f"><label for="c-tipo">Tipo</label><select id="c-tipo"><option value="casa">Conta da casa</option><option value="pessoal">Pessoal</option></select></div>
     <div class="f"><label for="c-pag" id="c-pag-l">Quem paga</label><select id="c-pag"></select></div>
     <div class="f"><label for="c-quando">Quando acontece</label><select id="c-quando"><option value="sempre">Todo mês</option><option value="parcelas">Parcelada (tem fim)</option><option value="unico">Uma vez só</option></select></div>
     <div class="f"><label for="c-inicio" id="c-inicio-l">A partir de</label><input type="month" id="c-inicio"></div>
     <div class="f" id="c-parc-f"><label for="c-parc">Número de parcelas</label><input type="number" id="c-parc" min="1" max="600" placeholder="48"></div>
-    <div class="f" id="c-div-f"><label for="c-div">Como dividir</label><select id="c-div"><option value="padrao">Divisão do casal (Nossa renda)</option><option value="igual">Meio a meio</option><option value="pct">Percentual próprio</option></select></div>
+    <div class="f" id="c-div-f"><label for="c-div">Como dividir</label><select id="c-div"><option value="padrao">Divisão do casal (Nossa renda)</option><option value="igual">Meio a meio</option><option value="pagador">Quem paga arca (sem acerto)</option><option value="pct">Percentual próprio</option></select></div>
     <div class="f" id="c-pct-f"><label for="c-pct" id="c-pct-l">Parte (%)</label><input type="number" id="c-pct" min="0" max="100"></div>
     <div class="f full" id="c-real-f"><label for="c-real" id="c-real-l">Valor real neste mês</label><input type="text" id="c-real" inputmode="decimal" placeholder="deixe vazio para usar o valor previsto"></div>
     <label class="ck full"><input type="checkbox" id="c-mor"> Conta de moradia</label>
@@ -117,9 +117,9 @@
     <div class="f"><label for="f-prazo">Parcelas que faltam</label><input type="number" id="f-prazo" min="1" max="600" placeholder="360"></div>
     <div class="f"><label for="f-boleto">Valor do boleto (R$, opcional)</label><input type="text" id="f-boleto" inputmode="decimal" placeholder="usa a parcela estimada"></div>
     <div class="f"><label for="f-dia">Dia do vencimento</label><input type="number" id="f-dia" min="1" max="31" placeholder="10"></div>
-    <div class="f"><label for="f-tipo">Vocês dividem?</label><select id="f-tipo"><option value="casa">Sim, dividido entre nós</option><option value="pessoal">Não, é pessoal</option></select></div>
+    <div class="f"><label for="f-tipo">Tipo</label><select id="f-tipo"><option value="casa">Conta da casa</option><option value="pessoal">Pessoal</option></select></div>
     <div class="f"><label for="f-pag">Quem paga</label><select id="f-pag"></select></div>
-    <div class="f"><label for="f-div">Como dividir</label><select id="f-div"><option value="igual">Meio a meio</option><option value="padrao">Divisão do casal (Nossa renda)</option></select></div>
+    <div class="f"><label for="f-div">Como dividir</label><select id="f-div"><option value="igual">Meio a meio</option><option value="padrao">Divisão do casal (Nossa renda)</option><option value="pagador">Quem paga arca (sem acerto)</option></select></div>
     <div class="f"><label for="f-extra">Amortização extra todo mês (R$)</label><input type="text" id="f-extra" inputmode="decimal" placeholder="0,00"></div>
     <label class="ck"><input type="checkbox" id="f-gerar" checked> Lançar a parcela nas contas do mês</label>
     <label class="ck"><input type="checkbox" id="f-mor"> Conta de moradia</label>

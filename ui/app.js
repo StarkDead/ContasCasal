@@ -49,7 +49,7 @@ function calc(ym = S.ym) {
   const c = cfg(), list = bills(ym), casa = list.filter(x => x.tipo === 'casa'), T = sum(casa), sA = +c.salarios.a || 0, sB = +c.salarios.b || 0;
   const rA = c.divisao === 'igual' ? .5 : c.divisao === 'custom' ? Math.min(100, Math.max(0, +c.pctA || 0)) / 100 : (sA + sB > 0 ? sA / (sA + sB) : .5);
   // Cada conta pode ter a sua divisão; sem escolha, vale a divisão do casal.
-  const fracA = x => x.div === 'igual' ? .5 : x.div === 'pct' ? Math.min(100, Math.max(0, +x.pctA || 0)) / 100 : rA;
+  const fracA = x => x.div === 'pagador' ? (x.pagador === 'a' ? 1 : 0) : x.div === 'igual' ? .5 : x.div === 'pct' ? Math.min(100, Math.max(0, +x.pctA || 0)) / 100 : rA;
   const parte = (x, p) => { const a = r2(x.valor * fracA(x)); return p === 'a' ? a : r2(x.valor - a); };
   const pago = { a: sum(casa.filter(x => x.pagador === 'a')), b: sum(casa.filter(x => x.pagador === 'b')) };
   const dA = r2(casa.reduce((t, x) => t + parte(x, 'a'), 0)), devido = { a: dA, b: r2(T - dA) }, ef = T ? dA / T : rA;
@@ -223,15 +223,15 @@ function vCasa() {
   const prox = [0, 1, 2, 3, 4, 5].map(n => { const ym = ymAdd(S.ym, n), q = calc(ym); return { ym, q }; });
   const fut = Object.entries(D.contas).map(([id, x]) => ({ ...x, id, quando: x.recorrente ? x.inicio : x.mes })).filter(x => x.quando && x.quando > S.ym).sort((p, q) => p.quando.localeCompare(q.quando));
   const pa = Math.round(cfg().divisao === 'igual' ? 50 : k.fracA({}) * 100);
-  const sel = x => `<select data-divsel="${esc(x.id)}" aria-label="Como dividir ${esc(x.nome)}"><option value="padrao" ${!x.div || x.div === 'padrao' ? 'selected' : ''}>Divisão do casal (${pa}/${100 - pa})</option><option value="igual" ${x.div === 'igual' ? 'selected' : ''}>Meio a meio</option>${x.div === 'pct' ? `<option value="pct" selected>${Math.round(k.fracA(x) * 100)}% / ${100 - Math.round(k.fracA(x) * 100)}%</option>` : ''}${x.fatura || x.fin ? '' : '<option value="editar">Outro percentual…</option>'}</select>`;
+  const sel = x => { const v = x.tipo !== 'casa' ? 'pessoal' : x.div === 'igual' ? 'igual' : x.div === 'pagador' ? 'pagador' : x.div === 'pct' ? 'pct' : 'padrao', o = (k, t) => `<option value="${k}" ${v === k ? 'selected' : ''}>${t}</option>`;
+    return `<select data-divsel="${esc(x.id)}" aria-label="Como fica ${esc(x.nome)}">${o('igual', 'Da casa · dividida meio a meio')}${o('padrao', `Da casa · dividida pela renda (${pa}/${100 - pa})`)}${o('pagador', 'Da casa · quem paga arca')}${v === 'pct' ? o('pct', `Da casa · ${Math.round(k.fracA(x) * 100)}% / ${100 - Math.round(k.fracA(x) * 100)}%`) : ''}${o('pessoal', 'Pessoal')}${x.fatura || x.fin ? '' : '<option value="editar">Outro percentual…</option>'}</select>`; };
   const cel = (x, w) => x.tipo === 'casa' ? brl(k.parte(x, w)) : x.pagador === w ? brl(x.valor) : '<span class="sub">—</span>';
   return `<section class="card"><div class="hd"><h2>Contas de ${ymNome(S.ym)} <small>· marque quais vocês dividem</small></h2><button class="btn sm ghost" data-act="nova-pessoal">+ Conta pessoal</button><button class="btn sm ghost" data-act="nova-dividida">+ Conta dividida</button></div>
-    ${k.list.length ? `<div class="tblx"><table><thead><tr><th>Conta</th><th class="r">Valor</th><th>Dividir?</th><th>Como divide</th><th class="r"><span class="dot a"></span> ${esc(c.nomes.a)}</th><th class="r"><span class="dot b"></span> ${esc(c.nomes.b)}</th><th>Quem paga</th><th></th></tr></thead><tbody>
+    ${k.list.length ? `<div class="tblx"><table><thead><tr><th>Conta</th><th class="r">Valor</th><th>Como fica</th><th>Moradia</th><th class="r"><span class="dot a"></span> ${esc(c.nomes.a)}</th><th class="r"><span class="dot b"></span> ${esc(c.nomes.b)}</th><th>Quem paga</th><th></th></tr></thead><tbody>
       ${k.list.map(x => `<tr><td class="w"><button class="nm" data-edit="${esc(x.id)}">${esc(x.nome)}</button> ${x.parcN ? `<span class="tag">${x.parc}/${x.parcN}</span>` : ''}${x.fatura ? '<span class="tag">cartão</span>' : ''}${x.fin ? '<span class="tag">financiamento</span>' : ''}${x.real ? `<span class="tag ok" title="Previsto: ${brl(x.previsto)}">valor real</span>` : ''}</td><td class="r">${brl(x.valor)}</td>
-        <td><label class="sw"><input type="checkbox" data-divtog="${esc(x.id)}" ${x.tipo === 'casa' ? 'checked' : ''}><span>${x.tipo === 'casa' ? 'Dividida' : 'Pessoal'}</span></label></td>
-        <td>${x.tipo === 'casa' ? sel(x) : '<span class="sub">não divide</span>'}</td><td class="r">${cel(x, 'a')}</td><td class="r">${cel(x, 'b')}</td><td><span class="dot ${x.pagador}"></span> ${esc(c.nomes[x.pagador])}</td><td>${delConta(x)}</td></tr>`).join('')}
+        <td>${sel(x)}</td><td>${x.fatura ? '' : `<label class="sw"><input type="checkbox" data-mortog="${esc(x.id)}" ${x.moradia ? 'checked' : ''} aria-label="${esc(x.nome)} é gasto de moradia"></label>`}</td><td class="r">${cel(x, 'a')}</td><td class="r">${cel(x, 'b')}</td><td><span class="dot ${x.pagador}"></span> ${esc(c.nomes[x.pagador])}</td><td>${delConta(x)}</td></tr>`).join('')}
       <tr class="tot"><td>Total</td><td class="r">${brl(sum(k.list))}</td><td></td><td></td><td class="r">${brl(r2(k.devido.a + k.pessoal.a))}</td><td class="r">${brl(r2(k.devido.b + k.pessoal.b))}</td><td></td><td></td></tr></tbody></table></div>
-      <p class="sub" style="margin:12px 0 0">Divididas: ${brl(k.T)} (${esc(c.nomes.a)} ${brl(k.devido.a)} · ${esc(c.nomes.b)} ${brl(k.devido.b)}). Pessoais: ${esc(c.nomes.a)} ${brl(k.pessoal.a)} · ${esc(c.nomes.b)} ${brl(k.pessoal.b)}. A fatura do cartão também pode ser marcada como pessoal ou dividida aqui.</p>`
+      <p class="sub" style="margin:12px 0 0">“Quem paga arca” é conta da casa que não entra no acerto entre vocês. Marque Moradia nas que são custo de morar. Da casa: ${brl(k.T)} (${esc(c.nomes.a)} ${brl(k.devido.a)} · ${esc(c.nomes.b)} ${brl(k.devido.b)}). Pessoais: ${esc(c.nomes.a)} ${brl(k.pessoal.a)} · ${esc(c.nomes.b)} ${brl(k.pessoal.b)}. A fatura do cartão também pode ser marcada como pessoal ou dividida aqui.</p>`
       : `<div class="empty">Nenhuma conta em ${ymNome(S.ym)}. Lance aqui financiamento do carro, da casa, condomínio, e marque em cada uma se vocês dividem ou se é pessoal.</div>`}</section>
   <section class="card"><div class="hd"><h2>Próximos meses</h2><button class="btn sm ghost" data-act="futura">+ Lançar conta futura</button></div>
     <div class="tblx" style="margin-top:10px"><table><thead><tr><th></th>${prox.map(p => `<th class="r">${MESES[+p.ym.slice(5) - 1].slice(0, 3)}/${p.ym.slice(2, 4)}</th>`).join('')}</tr></thead><tbody>
@@ -600,7 +600,7 @@ function renderPlano() {
   const rows = gs.map((x, i) => { const a = x.rows[0], z = x.rows[x.rows.length - 1], vs = [...new Set(x.rows.map(r => r.valor))];
     return `<tr class="${x.on ? '' : 'off'}"><td><input type="checkbox" data-grp="${i}" ${x.on ? 'checked' : ''} aria-label="Incluir ${esc(x.nome)}"></td><td class="w">${esc(x.nome)}${x.tipo === 'fin' ? ' <span class="tag">cadastre em Financiamentos</span>' : ''}</td>
       <td>${x.tipo === 'cartao' ? 'Cartão ' + esc(x.card) : lbl[x.tipo]}</td><td>${ymCurto(a.mes)}${z.mes !== a.mes ? ' → ' + ymCurto(z.mes) : ''}${a.parc ? ` <span class="tag">${a.parc.k}/${a.parc.n}${z !== a ? '…' + z.parc.k + '/' + z.parc.n : ''}</span>` : ''}</td>
-      <td>${x.tipo === 'cartao' ? 'pessoal' : x.tipo === 'repasse' ? 'repasse cobre' : x.pct === 1 ? 'pessoal' : x.pct === .5 ? 'meio a meio' : Math.round(x.pct * 100) + '% seu'}</td><td class="r">${brl(vs[0])}${vs.length > 1 ? '…' : ''}</td></tr>`; }).join('');
+      <td>${x.tipo === 'cartao' ? 'pessoal' : x.tipo === 'repasse' ? 'repasse cobre' : x.pct === 1 ? (/conta fixa/i.test(x.cat) ? 'da casa, você arca' : 'pessoal') : x.pct === .5 ? 'meio a meio' : Math.round(x.pct * 100) + '% seu'}</td><td class="r">${brl(vs[0])}${vs.length > 1 ? '…' : ''}</td></tr>`; }).join('');
   $('#i-prev').innerHTML = `<div class="tbl"><table><thead><tr><th></th><th>Item</th><th>Entra como</th><th>Período</th><th>Divisão</th><th class="r">Valor/mês</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="sub" style="margin:8px 0 0">Contas e empréstimos viram contas mensais (com parcela e fim). O que é de cartão entra como previsão nas faturas de cada mês e é substituído quando você importar a fatura real. Importar a planilha de novo atualiza o que veio dela, sem duplicar.</p>`;
   $('#i-go').disabled = !on.length; $('#i-go').textContent = on.length ? `Importar ${on.length} ${on.length === 1 ? 'item' : 'itens'}` : 'Importar';
@@ -625,11 +625,11 @@ function commitPlano(w) {
           d.lanc[uid()] = l; nl++; }
         continue;
       }
-      const pag = g.tipo === 'repasse' || /voc/i.test(g.quem) ? eu : ou, casa = g.tipo !== 'repasse' && g.pct > 0 && g.pct < 1;
+      const pag = g.tipo === 'repasse' || /voc/i.test(g.quem) ? eu : ou, arca = g.tipo !== 'repasse' && g.pct === 1 && /conta fixa/i.test(g.cat), casa = arca || (g.tipo !== 'repasse' && g.pct > 0 && g.pct < 1), mor = /condom|aluguel|\bgas\b|luz|energia|agua|internet|iptu/.test(Parse.norm(g.nome));
       for (const u of planoRuns(g)) {
         const id = 'pl' + hash(g.nome + '|' + g.forma + '|' + (u.parc ? u.inicio + '|' + u.parc.n : u.valor + '|' + (g.tipo === 'repasse' ? 'r' : pag))), old = d.contas[id];
-        d.contas[id] = { nome: g.nome.slice(0, 60), valor: u.valor, dia: u.dia, tipo: casa ? 'casa' : 'pessoal', pagador: pag, moradia: old ? !!old.moradia : false, recorrente: true, mes: null,
-          inicio: old && old.inicio && old.inicio < u.inicio && !u.parc ? old.inicio : u.inicio, fim: u.fim, div: casa ? (g.pct === .5 ? 'igual' : 'pct') : 'padrao', pctA: casa && g.pct !== .5 ? Math.round((eu === 'a' ? g.pct : 1 - g.pct) * 100) : null, plano: true };
+        d.contas[id] = { nome: g.nome.slice(0, 60), valor: u.valor, dia: u.dia, tipo: casa ? 'casa' : 'pessoal', pagador: pag, moradia: old ? !!old.moradia : mor, recorrente: true, mes: null,
+          inicio: old && old.inicio && old.inicio < u.inicio && !u.parc ? old.inicio : u.inicio, fim: u.fim, div: arca ? 'pagador' : casa ? (g.pct === .5 ? 'igual' : 'pct') : 'padrao', pctA: casa && !arca && g.pct !== .5 ? Math.round((eu === 'a' ? g.pct : 1 - g.pct) * 100) : null, plano: true };
         novas[id] = 1; nc++;
       }
       if (g.tipo === 'repasse') for (const r of g.rows) { d.extras[uid()] = { nome: `Repasse · ${g.nome}`.slice(0, 60), valor: r.valor, mes: r.mes, pessoa: eu, plano: true }; nr++; }
@@ -699,7 +699,8 @@ document.addEventListener('change', e => {
   if (t.dataset.divtog) { const id = t.dataset.divtog, tipo = t.checked ? 'casa' : 'pessoal';
     mutate(d => { const o = alvo(d, id); if (o) o.tipo = tipo; }, tipo === 'casa' ? 'Conta marcada como dividida' : 'Conta marcada como pessoal'); return; }
   if (t.dataset.divsel) { const id = t.dataset.divsel, v = t.value; if (v === 'pct') return; if (v === 'editar') { render(true); openConta(id); $('#c-div').value = 'pct'; tipoLbl(); return; }
-    mutate(d => { const o = alvo(d, id); if (o) { o.div = v; o.pctA = null; } }, 'Divisão atualizada'); return; }
+    mutate(d => { const o = alvo(d, id); if (!o) return; if (v === 'pessoal') { o.tipo = 'pessoal'; return; } o.tipo = 'casa'; o.div = v; o.pctA = null; }, 'Conta atualizada'); return; }
+  if (t.dataset.mortog) { const id = t.dataset.mortog, on = t.checked; mutate(d => { const o = alvo(d, id); if (o) o.moradia = on; }, on ? 'Marcada como moradia' : 'Tirada de moradia'); return; }
   if (t.dataset.link) { const id = t.dataset.link, alvo = t.value;
     mutate(d => { const l = d.lanc[id]; if (!l) return; const mes = mesDe(d, l.data.slice(0, 7)); if (l.conta) delete mes.pagas[l.conta]; if (alvo) { l.conta = alvo; mes.pagas[alvo] = true; } else delete l.conta; }, alvo ? 'Conta marcada como paga' : 'Vínculo removido'); }
 });

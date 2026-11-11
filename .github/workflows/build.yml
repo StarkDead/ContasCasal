@@ -23,11 +23,11 @@ jobs:
       - name: Numerar a versão
         run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
       - name: Gerar instalador
-        if: github.event_name == 'push'
         run: npm run dist
-      - name: Gerar e publicar a versão
+      - name: Publicar a versão
         if: github.event_name == 'workflow_dispatch'
-        run: npx electron-builder --win nsis --x64 --publish always
+        shell: bash
+        run: gh release create "v1.0.${{ github.run_number }}" dist/Casa-em-Dia-Instalador.exe dist/Casa-em-Dia-Instalador.exe.blockmap dist/latest.yml --target "$GITHUB_SHA" --title "Casa em Dia 1.0.${{ github.run_number }}" --notes "Atualização do Casa em Dia. Quem já tem o app instalado recebe sozinho." --latest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v4

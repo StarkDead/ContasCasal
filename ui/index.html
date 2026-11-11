@@ -79,7 +79,8 @@
     <div class="f"><label for="k-dia">Dia do vencimento</label><input type="number" id="k-dia" min="1" max="31" placeholder="10"></div>
     <div class="f"><label for="k-tipo">A fatura é</label><select id="k-tipo"><option value="casa">Dividida entre nós</option><option value="pessoal">Pessoal (não divide)</option></select></div>
     <div class="f"><label for="k-dono">Quem paga a fatura</label><select id="k-dono"></select></div>
-    <div class="f full"><label for="k-cor">Cor</label><select id="k-cor"><option value="grafite">Grafite</option><option value="laranja">Laranja</option><option value="roxo">Roxo</option><option value="azul">Azul</option><option value="verde">Verde</option><option value="vermelho">Vermelho</option></select></div>
+    <div class="f"><label for="k-fech">Dia do fechamento (opcional)</label><input type="number" id="k-fech" min="1" max="31" placeholder="3"></div>
+    <div class="f"><label for="k-cor">Cor</label><select id="k-cor"><option value="grafite">Grafite</option><option value="laranja">Laranja</option><option value="roxo">Roxo</option><option value="azul">Azul</option><option value="verde">Verde</option><option value="vermelho">Vermelho</option></select></div>
     <div class="full err" id="k-err" hidden></div>
     <div class="acts full">
       <button type="button" class="btn danger" id="k-del" hidden>Excluir</button><span class="grow"></span>
@@ -107,6 +108,7 @@
     <div class="f full"><label for="f-nome">Nome</label><input type="text" id="f-nome" maxlength="40" placeholder="Ex.: Financiamento da casa"></div>
     <div class="f"><label for="f-saldo">Saldo devedor atual (R$)</label><input type="text" id="f-saldo" inputmode="decimal" placeholder="0,00"></div>
     <div class="f"><label for="f-base">Saldo referente a</label><input type="month" id="f-base"></div>
+    <div class="f full"><label for="f-prim">Próxima parcela vence em</label><input type="month" id="f-prim"></div>
     <div class="f"><label for="f-taxa">Taxa de juros (%)</label><input type="text" id="f-taxa" inputmode="decimal" placeholder="9,5"></div>
     <div class="f"><label for="f-unid">A taxa é</label><select id="f-unid"><option value="aa">Ao ano</option><option value="am">Ao mês</option></select></div>
     <div class="f"><label for="f-sis">Sistema</label><select id="f-sis"><option value="sac">SAC (parcela diminui)</option><option value="price">Price (parcela fixa)</option></select></div>

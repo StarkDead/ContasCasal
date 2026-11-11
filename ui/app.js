@@ -116,7 +116,7 @@ function vVisao() {
       </section>
       <section class="card">
         <h2>Cartões</h2>
-        <div class="sub" style="margin-top:14px">Faturas de ${ymNome(S.ym)}</div>${big(prox[0].v, 'lg')}
+        <div class="sub" style="margin-top:14px">Faturas que vencem em ${ymNome(S.ym)}</div>${big(prox[0].v, 'lg')}
         ${cards.length ? `<div style="margin-top:12px"><button class="btn sm ghost" data-go="cartoes">Ver faturas</button></div>
           <div class="plastics">${cards.map(([id, x]) => plastic(id, x)).join('')}</div>
           <div class="sec up" style="margin-top:20px">Próximas faturas</div>
@@ -168,7 +168,7 @@ function vCartoes() {
   return `<div class="hd"><span class="grow"></span><button class="btn ghost" data-act="novo-cartao">+ Novo cartão</button></div>` + cards.map(([id, x]) => {
     const tot = faturaTotal(id, S.ym), manual = (D.fatManual[id] || {})[S.ym], l = Object.entries(D.lanc).map(([lid, v]) => ({ ...v, id: lid })).filter(v => v.cartao === id && v.fatura === S.ym).sort((p, q) => q.data.localeCompare(p.data));
     return `<section class="card"><div class="cardview"><div>${plastic(id, x, 'wide')}<div style="margin-top:12px"><button class="btn sm ghost" data-kedit="${esc(id)}">Editar cartão</button></div></div>
-      <div><div class="hd"><h2>Fatura de ${ymNome(S.ym)} <small>· ${x.tipo === 'casa' ? 'dividida entre os dois' : 'pessoal de ' + esc(c.nomes[x.dono])}</small></h2></div>
+      <div><div class="hd"><h2>Fatura que vence em ${ymNome(S.ym)} <small>· ${x.tipo === 'casa' ? 'dividida entre os dois' : 'pessoal de ' + esc(c.nomes[x.dono])}</small></h2></div>
         <div style="margin:10px 0">${big(tot, 'lg')}</div>
         <div class="inline"><label class="sub" for="fm-${esc(id)}">Valor digitado:</label><input type="text" inputmode="decimal" id="fm-${esc(id)}" placeholder="0,00" value="${manual != null ? money(manual) || '0' : ''}"><button class="btn sm ghost" data-fman="${esc(id)}">Usar este valor</button>${manual != null ? `<button class="btn sm ghost" data-fauto="${esc(id)}">Voltar à soma importada</button>` : ''}</div>
         <div class="sec">Lançamentos da fatura <span class="sub">· ${l.length}${l.some(v => v.prev) ? ' · “prevista” = parcela projetada de uma fatura anterior' : ''}</span></div>
@@ -225,7 +225,7 @@ const _tab = new WeakMap();
 function tabela(f, modo) {
   let c = _tab.get(f); if (!c) _tab.set(f, c = {}); if (c[modo] !== undefined) return c[modo];
   const i = f.unid === 'aa' ? Math.pow(1 + f.taxa / 100, 1 / 12) - 1 : f.taxa / 100, rows = [];
-  let saldo = +f.saldo, n = +f.prazo, ym = f.base, pmt = price(saldo, i, n), am = saldo / n, ok = true;
+  let saldo = +f.saldo, n = +f.prazo, ym = f.primeira || f.base, pmt = price(saldo, i, n), am = saldo / n, ok = true;
   const ex = {}; for (const a of f.amort || []) if (modo === 'plano' || a.feita) (ex[a.ym] = ex[a.ym] || []).push(a);
   while (saldo > .005 && rows.length < 720) {
     const j = saldo * i; let a = f.sistema === 'sac' ? am : pmt - j; if (!(a > 0)) { ok = false; break; } a = Math.min(a, saldo);
@@ -238,8 +238,8 @@ function tabela(f, modo) {
 }
 // Parcela do financiamento em um mês, para entrar nas contas do mês.
 function parcelaFin(f, ym) {
-  const t = tabela(f, 'feitas'); if (!t || ym < f.base || ym > t.fim) return null;
-  const k = ymDiff(f.base, ym), r = t.rows[k]; if (!r) return null;
+  const ini = f.primeira || f.base, t = tabela(f, 'feitas'); if (!t || ym < ini || ym > t.fim) return null;
+  const k = ymDiff(ini, ym), r = t.rows[k]; if (!r) return null;
   return { valor: +f.boleto > 0 ? +f.boleto : r.parcela, parc: k + 1, parcN: t.meses, amort: r.amort };
 }
 // Saldo devedor hoje: saldo informado menos o que já foi amortizado pelas parcelas marcadas como pagas e pelas amortizações feitas.
@@ -257,7 +257,7 @@ function vFinanc() {
     if (!b || !q) return `<section class="card"><div class="hd"><h2>${esc(f.nome)}</h2><button class="btn sm ghost" data-fedit="${esc(id)}">Editar</button></div><p class="err">Com estes números a parcela não cobre os juros. Confira saldo, taxa e prazo.</p></section>`;
     const eco = r2(b.juros - q.juros), dm = b.meses - q.meses, sf = saldoFin(id, f), pm = parcelaFin(f, S.ym), paga = !!pg['fin-' + id], pago = +f.saldo > 0 ? 1 - sf.saldo / +f.saldo : 0;
     return `<section class="card"><div class="hd"><h2>${esc(f.nome)} <small>· ${f.sistema === 'sac' ? 'SAC' : 'Price'} · ${nf.format(f.taxa)}% ${f.unid === 'aa' ? 'a.a.' : 'a.m.'} · ${(f.tipo || 'casa') === 'casa' ? 'dividido' : 'pessoal'}, quem paga: ${esc(c.nomes[f.pagador || 'a'])}</small></h2><button class="btn sm ghost" data-fedit="${esc(id)}">Editar</button></div>
-      <div class="stats" style="margin-top:14px"><div><div class="sub">Saldo devedor hoje</div>${big(sf.saldo, 'lg')}<div class="sub">era ${brl(+f.saldo)} em ${ymCurto(f.base)}</div></div>
+      <div class="stats" style="margin-top:14px"><div><div class="sub">Saldo devedor hoje</div>${big(sf.saldo, 'lg')}<div class="sub">era ${brl(+f.saldo)} em ${ymCurto(f.base)} · 1ª parcela em ${ymCurto(f.primeira || f.base)}</div></div>
         <div><div class="sub">Parcela de ${ymNome(S.ym)}</div>${pm ? big(pm.valor, 'md') + `<div class="sub">parcela ${pm.parc} de ${pm.parcN}${+f.boleto > 0 ? ' · valor do boleto' : ' · estimada'}</div>` : '<div class="sub">sem parcela neste mês</div>'}</div>
         <div><div class="sub">Parcelas pagas</div><div class="big md">${sf.pagas} <span class="ct">de ${sf.total}</span></div></div></div>
       <div class="bar" style="margin:14px 0 6px" role="img" aria-label="Quanto do saldo já foi pago"><i style="width:${Math.min(100, pago * 100)}%;background:var(--ok)"></i></div>
@@ -291,10 +291,11 @@ function vRenda() {
   </form></section>`;
 }
 
+function updMsg() { const u = S.upd || {}; return u.state === 'checking' ? 'Procurando…' : u.state === 'downloading' ? `Baixando a versão ${u.version || 'nova'}… ${u.pct || 0}%` : u.state === 'ready' ? 'Versão nova baixada. Clique em “Reiniciar e atualizar” no topo.' : u.state === 'none' ? 'Você já está na versão mais recente.' : u.state === 'error' ? 'Não consegui procurar agora. Confira a internet e tente de novo.' : u.state === 'dev' ? 'Disponível só no app instalado.' : ''; }
 function vDados() {
   return `<section class="card"><h2>Arquivo de dados</h2>
     <p class="sub" style="margin:4px 0 14px">Tudo o que vocês lançam fica neste arquivo. Para os dois verem as mesmas contas, guarde-o numa pasta sincronizada (Google Drive, OneDrive ou Dropbox) e abra o mesmo arquivo nos dois computadores.</p>
-    <div class="path">${esc(S.path || '')}</div>${S.versao ? `<p class="sub" style="margin:10px 0 0">Casa em Dia versão ${esc(S.versao)}. O app procura atualizações sozinho ao abrir.</p>` : ''}
+    <div class="path">${esc(S.path || '')}</div>${S.versao ? `<p class="sub" style="margin:10px 0 0">Casa em Dia versão ${esc(S.versao)}. O app procura atualizações sozinho ao abrir.</p><div class="inline" style="margin-top:8px"><button class="btn sm ghost" data-act="check-upd">Procurar atualização agora</button><span class="sub">${esc(updMsg())}</span></div>` : ''}
     <div class="acts" style="justify-content:flex-start;margin-top:14px"><button class="btn ghost" data-act="reveal">Mostrar na pasta</button><button class="btn ghost" data-act="abrir">Abrir outro arquivo</button><button class="btn ghost" data-act="novo">Criar arquivo novo</button></div>
     <p class="sub" style="margin:16px 0 0">Evitem editar ao mesmo tempo nos dois computadores: a pasta sincronizada pode criar uma cópia em conflito. O app relê o arquivo sozinho quando o outro salva.</p></section>
   <section class="card"><h2>Apagar dados</h2><p class="sub" style="margin:4px 0 14px">Apaga do arquivo compartilhado, para os dois. Não dá para desfazer.</p>
@@ -392,7 +393,7 @@ $('#fconta').onsubmit = e => {
 function openCard(id) {
   const x = id ? D.cartoes[id] : null; if (id && !x) return; S.editing = id || null;
   $('#k-t').textContent = x ? 'Editar cartão' : 'Novo cartão';
-  $('#k-nome').value = x ? x.nome : ''; $('#k-limite').value = x ? money(x.limite) : ''; $('#k-dia').value = x && x.dia || '';
+  $('#k-nome').value = x ? x.nome : ''; $('#k-limite').value = x ? money(x.limite) : ''; $('#k-dia').value = x && x.dia || ''; $('#k-fech').value = x && x.fech || '';
   $('#k-tipo').value = x ? x.tipo : 'casa'; fillPessoas($('#k-dono')); $('#k-dono').value = x ? x.dono : S.eu; $('#k-cor').value = x ? x.cor : 'grafite';
   resetDel($('#k-del'), !x); $('#k-err').hidden = true; $('#dcard').showModal();
 }
@@ -400,10 +401,10 @@ $('#k-del').onclick = e => { if (!sure(e.currentTarget)) return; const id = S.ed
   mutate(d => { delete d.cartoes[id]; delete d.fatManual[id]; for (const [k, l] of Object.entries(d.lanc)) if (l.cartao === id) delete d.lanc[k]; }, 'Cartão e faturas excluídos'); $('#dcard').close(); };
 $('#fcard').onsubmit = e => {
   e.preventDefault();
-  const nome = $('#k-nome').value.trim(), limite = inMoney($('#k-limite').value), dia = parseInt($('#k-dia').value, 10) || 0, err = $('#k-err');
-  const msg = !nome ? 'Dê um nome para o cartão.' : isNaN(limite) ? 'Confira o limite: use números como 8.000,00.' : (dia < 1 || dia > 31) ? 'Informe o dia do vencimento, de 1 a 31.' : '';
+  const nome = $('#k-nome').value.trim(), limite = inMoney($('#k-limite').value), dia = parseInt($('#k-dia').value, 10) || 0, fech = parseInt($('#k-fech').value, 10) || 0, err = $('#k-err');
+  const msg = !nome ? 'Dê um nome para o cartão.' : isNaN(limite) ? 'Confira o limite: use números como 8.000,00.' : (dia < 1 || dia > 31) ? 'Informe o dia do vencimento, de 1 a 31.' : (fech < 0 || fech > 31) ? 'O dia do fechamento vai de 1 a 31.' : '';
   if (msg) { err.textContent = msg; err.hidden = false; return; }
-  const id = S.editing, data = { nome, limite, dia, tipo: $('#k-tipo').value, dono: $('#k-dono').value, cor: $('#k-cor').value };
+  const id = S.editing, old = id && D.cartoes[id], data = { ...(old ? { div: old.div, pctA: old.pctA } : {}), nome, limite, dia, fech, tipo: $('#k-tipo').value, dono: $('#k-dono').value, cor: $('#k-cor').value };
   mutate(d => { d.cartoes[id || uid()] = data; }, 'Cartão salvo'); $('#dcard').close();
 };
 
@@ -424,7 +425,7 @@ $('#fres').onsubmit = e => {
 };
 function openFin(id) {
   const x = id ? D.financ[id] : null; if (id && !x) return; S.editing = id || null;
-  $('#f-t').textContent = x ? 'Editar financiamento' : 'Novo financiamento'; $('#f-nome').value = x ? x.nome : ''; $('#f-saldo').value = x ? money(x.saldo) : ''; $('#f-base').value = x ? x.base : S.ym;
+  $('#f-t').textContent = x ? 'Editar financiamento' : 'Novo financiamento'; $('#f-nome').value = x ? x.nome : ''; $('#f-saldo').value = x ? money(x.saldo) : ''; $('#f-base').value = x ? x.base : S.ym; $('#f-prim').value = x ? x.primeira || x.base : ymAdd(S.ym, 1);
   $('#f-taxa').value = x ? String(x.taxa).replace('.', ',') : ''; $('#f-unid').value = x ? x.unid : 'aa'; $('#f-sis').value = x ? x.sistema : 'sac'; $('#f-prazo').value = x ? x.prazo : ''; $('#f-extra').value = x ? money(x.extraMensal) : '';
   $('#f-dia').value = x && x.dia || ''; fillPessoas($('#f-pag')); $('#f-pag').value = x && x.pagador || S.eu; $('#f-tipo').value = x && x.tipo || 'casa'; $('#f-div').value = x && x.div || 'igual';
   $('#f-boleto').value = x ? money(x.boleto) : ''; $('#f-mor').checked = !!(x && x.moradia); $('#f-gerar').checked = !x || x.gerar !== false;
@@ -432,13 +433,24 @@ function openFin(id) {
 }
 $('#f-del').onclick = e => { if (!sure(e.currentTarget)) return; const id = S.editing; mutate(d => { delete d.financ[id]; }, 'Financiamento excluído'); $('#dfin').close(); };
 $('#ffin').onsubmit = e => {
-  e.preventDefault(); const nome = $('#f-nome').value.trim(), saldo = inMoney($('#f-saldo').value), taxa = Parse.num($('#f-taxa').value.replace('%', '')), prazo = parseInt($('#f-prazo').value, 10) || 0, extra = inMoney($('#f-extra').value), boleto = inMoney($('#f-boleto').value), dia = parseInt($('#f-dia').value, 10) || 0, base = $('#f-base').value, err = $('#f-err');
-  const msg = !nome ? 'Dê um nome, como “Financiamento da casa”.' : !(saldo > 0) ? 'Informe o saldo devedor atual.' : !(taxa >= 0 && taxa < 100) ? 'Informe a taxa de juros, como 9,5.' : !(prazo >= 1 && prazo <= 600) ? 'Informe quantas parcelas faltam.' : !/^\d{4}-\d{2}$/.test(base) ? 'Informe o mês do saldo.' : isNaN(extra) ? 'Confira o valor da amortização mensal.' : isNaN(boleto) ? 'Confira o valor do boleto.' : (dia < 0 || dia > 31) ? 'O dia do vencimento vai de 1 a 31.' : '';
+  e.preventDefault(); const nome = $('#f-nome').value.trim(), saldo = inMoney($('#f-saldo').value), taxa = Parse.num($('#f-taxa').value.replace('%', '')), prazo = parseInt($('#f-prazo').value, 10) || 0, extra = inMoney($('#f-extra').value), boleto = inMoney($('#f-boleto').value), dia = parseInt($('#f-dia').value, 10) || 0, base = $('#f-base').value, prim = $('#f-prim').value, err = $('#f-err');
+  const msg = !nome ? 'Dê um nome, como “Financiamento da casa”.' : !(saldo > 0) ? 'Informe o saldo devedor atual.' : !(taxa >= 0 && taxa < 100) ? 'Informe a taxa de juros, como 9,5.' : !(prazo >= 1 && prazo <= 600) ? 'Informe quantas parcelas faltam.' : !/^\d{4}-\d{2}$/.test(base) ? 'Informe o mês do saldo.' : !/^\d{4}-\d{2}$/.test(prim) ? 'Informe o mês em que vence a próxima parcela.' : isNaN(extra) ? 'Confira o valor da amortização mensal.' : isNaN(boleto) ? 'Confira o valor do boleto.' : (dia < 0 || dia > 31) ? 'O dia do vencimento vai de 1 a 31.' : '';
   if (msg) { err.textContent = msg; err.hidden = false; return; }
-  const id = S.editing; mutate(d => { const old = id && d.financ[id]; d.financ[id || uid()] = { nome, saldo, base, taxa, unid: $('#f-unid').value, sistema: $('#f-sis').value, prazo, extraMensal: extra, dia, pagador: $('#f-pag').value, tipo: $('#f-tipo').value, div: $('#f-div').value, boleto, moradia: $('#f-mor').checked, gerar: $('#f-gerar').checked, amort: (old && old.amort) || [] }; }, 'Financiamento salvo'); $('#dfin').close();
+  const id = S.editing; mutate(d => { const old = id && d.financ[id]; d.financ[id || uid()] = { nome, saldo, base, primeira: prim, taxa, unid: $('#f-unid').value, sistema: $('#f-sis').value, prazo, extraMensal: extra, dia, pagador: $('#f-pag').value, tipo: $('#f-tipo').value, div: $('#f-div').value, boleto, moradia: $('#f-mor').checked, gerar: $('#f-gerar').checked, amort: (old && old.amort) || [] }; }, 'Financiamento salvo'); $('#dfin').close();
 };
 
 /* ---------- importação ---------- */
+// Em qual mês a fatura vence, pelas datas das compras: fecha depois da última compra e vence no próximo dia de vencimento.
+function vencFatura(card, items) {
+  const ds = items.filter(x => x.on && x.valor < 0 && !x.parc).map(x => x.data).concat(items.filter(x => x.on && x.valor < 0).map(x => x.data)).sort();
+  const reg = items.filter(x => x.on && x.valor < 0 && !x.parc).map(x => x.data).sort(), last = (reg.length ? reg : ds)[(reg.length ? reg : ds).length - 1];
+  if (!card || !last) return null;
+  const [y, m, d] = last.split('-').map(Number), venc = +card.dia || 1, fech = +card.fech || 0;
+  let t = fech ? Date.UTC(y, m - 1 + (d > fech ? 1 : 0), fech) : Date.UTC(y, m - 1, d) + 4 * 864e5;   // sem fechamento informado: supõe ao menos 4 dias até vencer
+  const c = new Date(t + 864e5); let vy = c.getUTCFullYear(), vm = c.getUTCMonth() + 1; if (c.getUTCDate() > venc) { vm++; if (vm > 12) { vm = 1; vy++; } }
+  return vy + '-' + String(vm).padStart(2, '0');
+}
+function autoFatura() { if (W.dest !== 'cartao' || W.fatFixa || !W.kind) return; const v = vencFatura(D.cartoes[W.cartao], W.items); if (v) { W.fatura = v; W.fatAuto = true; } }
 const pkey = x => Parse.norm(x.parc.base) + '|' + Math.abs(x.valor).toFixed(2) + '|' + x.parc.n;
 let W = null;
 function openImp(dest) {
@@ -461,7 +473,7 @@ async function readFile(f) {
     }
     if (W.kind === 'table') { if (!W.t.rows.length) throw new Error('vazio'); W.map = Parse.guess(W.t); }
   } catch (e) { W.kind = null; impErr('Não consegui ler este arquivo. Confira se é um OFX, CSV ou Excel baixado do banco e se tem lançamentos.'); }
-  buildItems(); renderImp();
+  buildItems(); autoFatura(); renderImp();
 }
 function buildItems() {
   W.items = []; W.skipped = 0; if (!W.kind) return;
@@ -491,7 +503,7 @@ function renderImp() {
   const col = (k, lbl, opt) => `<div class="f"><label for="m-${k}">${lbl}</label><select id="m-${k}" data-map="${k}">${opt ? '<option value="-1">(não tem)</option>' : ''}${W.t.header.map((h, i) => `<option value="${i}" ${W.map[k] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>`;
   let o = '';
   if (W.dest === 'extrato') o += pes('De quem é a conta bancária');
-  if (W.dest === 'cartao') o += cards.length ? `<div class="f"><label for="i-cartao">Cartão</label><select id="i-cartao">${cards.map(([id, x]) => `<option value="${esc(id)}" ${W.cartao === id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></div><div class="f"><label for="i-fatura">Fatura de</label><input type="month" id="i-fatura" value="${esc(W.fatura)}"></div><label class="ck"><input type="checkbox" id="i-proj" ${W.proj ? 'checked' : ''}> Lançar as parcelas que faltam nas próximas faturas</label>` : `<div class="err">Cadastre o cartão primeiro, na tela Cartões.</div>`;
+  if (W.dest === 'cartao') o += cards.length ? `<div class="f"><label for="i-cartao">Cartão</label><select id="i-cartao">${cards.map(([id, x]) => `<option value="${esc(id)}" ${W.cartao === id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></div><div class="f"><label for="i-fatura">Fatura que vence em</label><input type="month" id="i-fatura" value="${esc(W.fatura)}"></div><label class="ck"><input type="checkbox" id="i-proj" ${W.proj ? 'checked' : ''}> Lançar as parcelas que faltam nas próximas faturas</label>${W.fatAuto ? `<div class="sub">Vencimento em <b>${String(D.cartoes[W.cartao].dia || 1).padStart(2, '0')}/${W.fatura.slice(5)}/${W.fatura.slice(0, 4)}</b>, calculado pelas datas das compras. Ajuste o mês se não bater.</div>` : ''}` : `<div class="err">Cadastre o cartão primeiro, na tela Cartões.</div>`;
   if (W.dest === 'contas') o += pes('Quem paga (quando a planilha não diz)');
   if (W.kind === 'table') o += W.dest === 'contas' ? col('desc', 'Coluna do nome') + col('valor', 'Coluna do valor') + col('dia', 'Coluna do vencimento', 1) + col('quem', 'Coluna de quem paga', 1) : col('data', 'Coluna da data') + col('desc', 'Coluna da descrição') + col('valor', 'Coluna do valor');
   $('#i-opts').innerHTML = `<div class="opts">${o}</div>`;
@@ -508,10 +520,10 @@ $('#dimp').addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.item) { W.items[+t.dataset.item].on = t.checked; renderImp(); return; }
   if (t.id === 'i-file') return;
-  if (t.id === 'i-pessoa') W.pessoa = t.value; else if (t.id === 'i-cartao') W.cartao = t.value; else if (t.id === 'i-fatura') W.fatura = t.value; else if (t.id === 'i-proj') { W.proj = t.checked; renderImp(); return; } else if (t.dataset.map) W.map[t.dataset.map] = +t.value;
+  if (t.id === 'i-pessoa') W.pessoa = t.value; else if (t.id === 'i-cartao') { W.cartao = t.value; autoFatura(); } else if (t.id === 'i-fatura') { W.fatura = t.value; W.fatFixa = true; W.fatAuto = false; } else if (t.id === 'i-proj') { W.proj = t.checked; renderImp(); return; } else if (t.dataset.map) W.map[t.dataset.map] = +t.value;
   if (t.id !== 'i-fatura' && t.id !== 'i-cartao') buildItems(); renderImp();
 });
-$('#i-dest').onclick = e => { const b = e.target.closest('[data-dest]'); if (!b) return; W.dest = b.dataset.dest; buildItems(); renderImp(); };
+$('#i-dest').onclick = e => { const b = e.target.closest('[data-dest]'); if (!b) return; W.dest = b.dataset.dest; buildItems(); autoFatura(); renderImp(); };
 $('#i-go').onclick = () => {
   const w = W, items = w.items.filter(x => x.on); $('#dimp').close();
   mutate(d => {
@@ -594,6 +606,7 @@ document.addEventListener('click', e => {
     }); }
   else if (d.act === 'futura') openConta(null, { titulo: 'Lançar conta futura', quando: 'unico', inicio: ymAdd(S.ym, 1) });
   else if (d.act === 'nova-pessoal') openConta(null, { titulo: 'Nova conta pessoal', tipo: 'pessoal' });
+  else if (d.act === 'check-upd') { if (store.checkUpdate) store.checkUpdate().then(r => { S.upd = r; render(); }); }
   else if (d.act === 'atualizar') store.installUpdate && store.installUpdate();
   else if (d.act === 'nova-dividida') openConta(null, { titulo: 'Nova conta dividida', div: 'igual' });
   else if (d.redit) openRes(d.redit);
@@ -624,6 +637,7 @@ addEventListener('hashchange', route);
 
 const tema = ls.get('tema'); if (tema === 'light' || tema === 'dark') document.documentElement.dataset.theme = tema;
 route();
+if (store.onUpdateState) store.onUpdateState(u => { S.upd = u; if (u.state === 'ready') S.update = true; if (S.view === 'dados' || u.state === 'ready') render(); });
 if (store.onUpdate) { store.onUpdate(() => { S.update = true; render(); }); store.updateStatus().then(r => { if (r) { S.update = true; render(); } }); store.version().then(v => { S.versao = v; }); }
 store.onChanged(() => { q = q.then(load).then(() => render()); });
 load().then(() => { S.ready = true; render(true); }, () => { S.ready = true; S.loadErr = 'read'; render(true); });

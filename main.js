@@ -62,6 +62,14 @@ ipcMain.handle('data:save', (_e, json) => {
   return true;
 });
 
+let updState = null;
+function sendUpd(u) { updState = u; if (win && !win.isDestroyed()) win.webContents.send('update:state', u); }
+ipcMain.handle('update:check', () => {
+  if (!app.isPackaged || !autoUpdater) return { state: 'dev' };
+  if (updateReady) return updState;
+  autoUpdater.checkForUpdates().catch(() => {});
+  return { state: 'checking' };
+});
 ipcMain.handle('app:version', () => app.getVersion());
 ipcMain.handle('update:status', () => updateReady);
 ipcMain.handle('update:install', () => { if (autoUpdater && updateReady) autoUpdater.quitAndInstall(); });
@@ -84,11 +92,15 @@ app.whenReady().then(() => {
   createWindow();
   // Atualização automática: baixa a versão nova publicada no GitHub e instala ao fechar o app.
   if (app.isPackaged && autoUpdater) {
-    autoUpdater.on('update-downloaded', () => { updateReady = true; if (win && !win.isDestroyed()) win.webContents.send('update:ready'); });
-    autoUpdater.on('error', () => {});
+    autoUpdater.on('checking-for-update', () => sendUpd({ state: 'checking' }));
+    autoUpdater.on('update-available', (i) => sendUpd({ state: 'downloading', version: i.version, pct: 0 }));
+    autoUpdater.on('download-progress', (p) => sendUpd({ state: 'downloading', version: (updState || {}).version, pct: Math.round(p.percent) }));
+    autoUpdater.on('update-not-available', () => sendUpd({ state: 'none' }));
+    autoUpdater.on('update-downloaded', (i) => { updateReady = true; sendUpd({ state: 'ready', version: i.version }); if (win && !win.isDestroyed()) win.webContents.send('update:ready'); });
+    autoUpdater.on('error', () => sendUpd({ state: 'error' }));
     const check = () => autoUpdater.checkForUpdates().catch(() => {});
     check();
-    setInterval(check, 4 * 3600e3);
+    setInterval(check, 3600e3);
   }
 });
 app.on('window-all-closed', () => app.quit());
